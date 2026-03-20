@@ -1,0 +1,63 @@
+{
+  "name": "jizhang",
+  "version": "1.0.1",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && electron-builder",
+    "build:win": "vite build && electron-builder --win",
+    "preview": "vite preview",
+    "release": "node scripts/release.mjs",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
+  },
+  "dependencies": {
+    "@primevue/themes": "^4.0.0",
+    "better-sqlite3": "^12.8.0",
+    "chart.js": "^4.4.0",
+    "dayjs": "^1.11.0",
+    "electron-updater": "^6.8.3",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.0.0",
+    "uuid": "^10.0.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "cross-env": "^10.1.0",
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
+    "vite": "^5.0.0",
+    "vite-plugin-electron": "^0.29.1",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.jizhang.app",
+    "productName": "记账本",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "language": "2052"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Yuan-ZiWeiXing",
+      "repo": "jizhang",
+      "releaseType": "release"
+    }
+  }
+}

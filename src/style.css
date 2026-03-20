@@ -1,0 +1,48 @@
+/* Mac-style global styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  background: transparent;
+}
+
+:root {
+  --mac-bg: #f0f0f0;
+  --mac-sidebar-bg: rgba(255,255,255,0.7);
+  --mac-titlebar-bg: rgba(236,236,236,0.9);
+  --mac-border: rgba(0,0,0,0.1);
+  --mac-text: #1d1d1f;
+  --mac-text-secondary: #6e6e73;
+  --mac-accent: #007aff;
+  --mac-red: #ff3b30;
+  --mac-green: #34c759;
+  --mac-yellow: #ff9500;
+  --mac-surface: rgba(255,255,255,0.8);
+  --mac-hover: rgba(0,0,0,0.05);
+  --mac-selected: rgba(0,122,255,0.12);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.35);
+}
