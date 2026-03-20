@@ -1,15 +1,11 @@
 #!/usr/bin/env node
-/**
- * 发布脚本：bump 版本 -> git commit/tag/push -> 打包 -> 创建 GitHub Release -> 上传文件
- * 用法：node scripts/release.mjs [patch|minor|major]
- * 需要环境变量 GH_TOKEN=你的 GitHub Personal Access Token
- */
 import { execSync } from 'child_process'
 import { readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
 import fs from 'fs'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -17,9 +13,12 @@ const root = join(__dirname, '..')
 const GH_TOKEN = process.env.GH_TOKEN
 if (!GH_TOKEN) {
   console.error('❌ 请设置环境变量 GH_TOKEN')
-  console.error('   例：set GH_TOKEN=ghp_xxxxxxxxxxxx && node scripts/release.mjs')
   process.exit(1)
 }
+
+const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || ''
+const agent = PROXY ? new HttpsProxyAgent(PROXY) : undefined
+if (PROXY) console.log(`🔗 使用代理: ${PROXY}`)
 
 const OWNER = 'Yuan-ZiWeiXing'
 const REPO = 'jizhang'
@@ -49,10 +48,17 @@ execSync('npx electron-builder --win', { cwd: root, stdio: 'inherit' })
 
 // 4. Git commit + tag + push
 console.log('\n🚀 提交代码...')
+const authRemote = `https://${GH_TOKEN}@github.com/${OWNER}/${REPO}.git`
+// 配置 git 走代理
+if (PROXY) execSync(`git config http.proxy ${PROXY}`, { cwd: root })
 execSync('git add -A', { cwd: root, stdio: 'inherit' })
-execSync(`git commit -m "chore: release v${newVersion}"`, { cwd: root, stdio: 'inherit' })
+try {
+  execSync(`git commit -m "chore: release v${newVersion}"`, { cwd: root, stdio: 'inherit' })
+} catch {
+  console.log('  (没有新变更，跳过 commit)')
+}
 execSync(`git tag v${newVersion}`, { cwd: root, stdio: 'inherit' })
-execSync('git push origin HEAD --tags', { cwd: root, stdio: 'inherit' })
+execSync(`git push ${authRemote} HEAD --tags`, { cwd: root, stdio: 'inherit' })
 console.log(`✅ 已推送 tag v${newVersion}`)
 
 // 5. 创建 GitHub Release
@@ -95,6 +101,7 @@ function githubRequest(method, path, body) {
       hostname: 'api.github.com',
       path,
       method,
+      agent,
       headers: {
         'Authorization': `token ${GH_TOKEN}`,
         'User-Agent': 'jizhang-release-script',
@@ -123,6 +130,7 @@ function uploadAsset(uploadUrl, name, data, contentType) {
       hostname: url.hostname,
       path: url.pathname + url.search,
       method: 'POST',
+      agent,
       headers: {
         'Authorization': `token ${GH_TOKEN}`,
         'User-Agent': 'jizhang-release-script',

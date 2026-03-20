@@ -8,9 +8,9 @@
     "build": "vite build && electron-builder",
     "build:win": "vite build && electron-builder --win",
     "preview": "vite preview",
-    "release": "node scripts/release.mjs",
-    "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major"
+    "release": "cross-env HTTPS_PROXY=http://127.0.0.1:7898 node scripts/release.mjs",
+    "release:minor": "cross-env HTTPS_PROXY=http://127.0.0.1:7898 node scripts/release.mjs minor",
+    "release:major": "cross-env HTTPS_PROXY=http://127.0.0.1:7898 node scripts/release.mjs major"
   },
   "dependencies": {
     "@primevue/themes": "^4.0.0",
@@ -28,6 +28,7 @@
     "cross-env": "^10.1.0",
     "electron": "^41.0.3",
     "electron-builder": "^26.8.1",
+    "https-proxy-agent": "^8.0.0",
     "vite": "^5.0.0",
     "vite-plugin-electron": "^0.29.1",
     "vite-plugin-electron-renderer": "^0.14.6"
