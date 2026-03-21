@@ -65,7 +65,9 @@ execSync('npx electron-builder --win', { cwd: root, stdio: 'inherit' })
 // ---- 4. Git commit + tag + push ----
 console.log('\n🚀 提交并推送...')
 const authRemote = `https://${GH_TOKEN}@github.com/${OWNER}/${REPO}.git`
-if (PROXY) execSync(`git config http.proxy ${PROXY}`, { cwd: root })
+// 优先用 socks5，fallback 到 http
+const proxyForGit = PROXY.replace('http://', 'socks5://')
+execSync(`git config http.proxy ${proxyForGit}`, { cwd: root })
 execSync('git add -A', { cwd: root, stdio: 'inherit' })
 try {
   execSync(`git commit -m "chore: release v${newVersion}"`, { cwd: root, stdio: 'inherit' })
@@ -75,7 +77,13 @@ try {
 } catch {
   console.log(`  tag v${newVersion} 已存在，跳过`)
 }
-execSync(`git push ${authRemote} HEAD --tags`, { cwd: root, stdio: 'inherit' })
+try {
+  execSync(`git push ${authRemote} HEAD --tags`, { cwd: root, stdio: 'inherit' })
+} catch {
+  console.log('  socks5 失败，尝试 http 代理...')
+  execSync(`git config http.proxy ${PROXY}`, { cwd: root })
+  execSync(`git push ${authRemote} HEAD --tags`, { cwd: root, stdio: 'inherit' })
+}
 console.log('✅ 代码和标签已推送')
 
 // ---- 5. 创建 GitHub Release ----
