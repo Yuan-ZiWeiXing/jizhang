@@ -103,4 +103,11 @@ function setupIpc() {
   ipcMain.handle('updater:download', () => autoUpdater.downloadUpdate())
   ipcMain.on('updater:install', () => autoUpdater.quitAndInstall())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
+
+  // Funds
+  ipcMain.handle('funds:getAll', () => db.getAllFunds())
+  ipcMain.handle('funds:getByDateRange', (_, start, end) => db.getFundsByDateRange(start, end))
+  ipcMain.handle('funds:add', (_, data) => db.addFund(data))
+  ipcMain.handle('funds:updateOut', (_, id, data) => db.updateFundOut(id, data))
+  ipcMain.handle('funds:delete', (_, id) => db.deleteFund(id))
 }

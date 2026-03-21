@@ -41,6 +41,19 @@ export function createDb(userDataPath) {
       note TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS funds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_no TEXT NOT NULL,
+      card_date TEXT NOT NULL,
+      cvv TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT '未完成',
+      in_amount REAL DEFAULT 0,
+      in_rate REAL DEFAULT 1,
+      out_amount REAL DEFAULT 0,
+      out_rate REAL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `)
 
   // Seed categories if empty
@@ -76,6 +89,26 @@ export function createDb(userDataPath) {
     },
     getAllCategories() {
       return db.prepare('SELECT * FROM categories').all()
+    },
+    // Funds
+    getAllFunds() {
+      return db.prepare('SELECT * FROM funds ORDER BY created_at DESC').all()
+    },
+    getFundsByDateRange(startDate, endDate) {
+      return db.prepare('SELECT * FROM funds WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC').all(startDate, endDate + ' 23:59:59')
+    },
+    addFund({ card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate }) {
+      const stmt = db.prepare('INSERT INTO funds (card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      const result = stmt.run(card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1)
+      return db.prepare('SELECT * FROM funds WHERE id = ?').get(result.lastInsertRowid)
+    },
+    updateFundOut(id, { out_amount, out_rate }) {
+      db.prepare('UPDATE funds SET out_amount=?, out_rate=? WHERE id=?').run(out_amount, out_rate, id)
+      return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
+    },
+    deleteFund(id) {
+      db.prepare('DELETE FROM funds WHERE id = ?').run(id)
+      return { ok: true }
     },
   }
 }

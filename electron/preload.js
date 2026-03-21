@@ -25,4 +25,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on(channel, (_, ...args) => fn(...args))
     return () => ipcRenderer.removeAllListeners(channel)
   },
+
+  // Funds
+  getAllFunds: () => ipcRenderer.invoke('funds:getAll'),
+  getFundsByDateRange: (start, end) => ipcRenderer.invoke('funds:getByDateRange', start, end),
+  addFund: (data) => ipcRenderer.invoke('funds:add', data),
+  updateFundOut: (id, data) => ipcRenderer.invoke('funds:updateOut', id, data),
+  deleteFund: (id) => ipcRenderer.invoke('funds:delete', id),
 })

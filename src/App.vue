@@ -68,6 +68,7 @@ import { useStore } from './store.js'
 import DashboardView from './views/DashboardView.vue'
 import RecordsView from './views/RecordsView.vue'
 import StatsView from './views/StatsView.vue'
+import FundsView from './views/FundsView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
 
@@ -82,10 +83,11 @@ const navItems = [
   { id: 'dashboard', label: '仪表板', icon: 'pi-home' },
   { id: 'records', label: '账单记录', icon: 'pi-list' },
   { id: 'stats', label: '统计分析', icon: 'pi-chart-bar' },
+  { id: 'funds', label: '资金', icon: 'pi-credit-card' },
 ]
 
 const currentComponent = computed(() => {
-  const map = { dashboard: DashboardView, records: RecordsView, stats: StatsView }
+  const map = { dashboard: DashboardView, records: RecordsView, stats: StatsView, funds: FundsView }
   return map[currentView.value]
 })
 
