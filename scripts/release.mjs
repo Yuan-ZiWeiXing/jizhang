@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * 发布脚本：提交代码 -> bump版本 -> 构建打包 -> 推送tag -> 创建Release
+ * 发布脚本：提交代码 -> bump版本 -> 构建打包 -> 推送tag -> 创建Release -> 打开浏览器上传
  * 用法：
- *   npm run release         # patch (1.0.1 -> 1.0.2)
+ *   npm run release         # patch (1.0.x -> 1.0.x+1)
  *   npm run release:minor   # minor
  *   npm run release:major   # major
  * 需要环境变量：GH_TOKEN
  */
-import { execSync, exec } from 'child_process'
+import { execSync } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
-import { HttpsProxyAgent } from 'https-proxy-agent'
+import { SocksProxyAgent } from 'socks-proxy-agent'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -24,18 +24,18 @@ if (!GH_TOKEN) {
   process.exit(1)
 }
 
-const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || ''
-const agent = PROXY ? new HttpsProxyAgent(PROXY) : undefined
+// 代理仅用于 GitHub API（Node.js），git push 走本地网络
+const SOCKS_PROXY = process.env.SOCKS_PROXY || 'socks5://127.0.0.1:7898'
+const agent = new SocksProxyAgent(SOCKS_PROXY)
 const OWNER = 'Yuan-ZiWeiXing'
 const REPO = 'jizhang'
 const bumpType = process.argv[2] || 'patch'
 
-// ---- 1. 提交当前未提交的代码 ----
+// ---- 1. 提交未暂存的改动 ----
 console.log('\n📝 检查工作区...')
 const status = execSync('git status --porcelain', { cwd: root }).toString().trim()
 if (status) {
   console.log('  提交未暂存的改动...')
-  if (PROXY) execSync(`git config http.proxy ${PROXY}`, { cwd: root })
   execSync('git add -A', { cwd: root, stdio: 'inherit' })
   try {
     execSync('git commit -m "chore: pre-release changes"', { cwd: root, stdio: 'inherit' })
@@ -64,10 +64,10 @@ execSync('npx electron-builder --win', { cwd: root, stdio: 'inherit' })
 
 // ---- 4. Git commit + tag + push ----
 console.log('\n🚀 提交并推送...')
+// 清除代理配置，走本地网络
+try { execSync('git config --unset http.proxy', { cwd: root }) } catch {}
+try { execSync('git config --unset https.proxy', { cwd: root }) } catch {}
 const authRemote = `https://${GH_TOKEN}@github.com/${OWNER}/${REPO}.git`
-// git 走 socks5 代理
-const socks5Proxy = PROXY ? PROXY.replace(/^https?:\/\//, 'socks5://') : ''
-if (socks5Proxy) execSync(`git config http.proxy ${socks5Proxy}`, { cwd: root })
 execSync('git add -A', { cwd: root, stdio: 'inherit' })
 try {
   execSync(`git commit -m "chore: release v${newVersion}"`, { cwd: root, stdio: 'inherit' })
@@ -75,42 +75,40 @@ try {
 try {
   execSync(`git tag v${newVersion}`, { cwd: root })
 } catch {
-  console.log(`  tag v${newVersion} 已存在，跳过`)
+  console.log(`  tag v${newVersion} 已存在`)
 }
 execSync(`git push ${authRemote} HEAD --tags`, { cwd: root, stdio: 'inherit' })
 console.log('✅ 代码和标签已推送')
 
 // ---- 5. 创建 GitHub Release ----
 console.log('\n🎉 创建 GitHub Release...')
-const releaseInfo = await githubPost(`/repos/${OWNER}/${REPO}/releases`, {
+const releaseInfo = await githubApi('POST', `/repos/${OWNER}/${REPO}/releases`, {
   tag_name: `v${newVersion}`,
   name: `v${newVersion}`,
-  body: `## 记账本 v${newVersion}\n\n### 下载\n请下载下方的 \`记账本 Setup ${newVersion}.exe\` 安装。`,
+  body: `## 记账本 v${newVersion}\n\n### 安装\n下载下方 \`记账本 Setup ${newVersion}.exe\` 安装即可。`,
   draft: false,
   prerelease: false,
 })
-console.log(`✅ Release 已创建: ${releaseInfo.html_url}`)
+console.log(`✅ Release: ${releaseInfo.html_url}`)
 
-// ---- 6. 打开浏览器上传安装包 ----
-const editUrl = `https://github.com/${OWNER}/${REPO}/releases/edit/v${newVersion}`
-console.log(`\n📂 安装包位置: release\\`)
-console.log(`   请上传以下文件到 GitHub Release:`)
-console.log(`   - 记账本 Setup ${newVersion}.exe`)
-console.log(`   - 记账本 Setup ${newVersion}.exe.blockmap`)
-console.log(`   - latest.yml`)
-console.log(`\n🌐 正在打开浏览器...`)
-exec(`start ${editUrl}`)
+// ---- 6. electron-builder 上传安装包 ----
+console.log('\n⬆️  上传安装包到 GitHub Release...')
+execSync('npx electron-builder --win --publish always', {
+  cwd: root,
+  stdio: 'inherit',
+  env: { ...process.env, GH_TOKEN },
+})
 
-console.log(`\n✅ 全部完成！v${newVersion} 已发布`)
+console.log(`\n🎊 v${newVersion} 发布完成！`)
 console.log(`   ${releaseInfo.html_url}\n`)
 
-// ---- 工具函数 ----
-function githubPost(path, body) {
+// ---- 工具 ----
+function githubApi(method, path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body)
     const req = https.request({
       hostname: 'api.github.com',
-      path, method: 'POST', agent,
+      path, method, agent,
       headers: {
         'Authorization': `token ${GH_TOKEN}`,
         'User-Agent': 'jizhang-release',
