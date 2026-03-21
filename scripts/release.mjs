@@ -8,7 +8,7 @@
  * 需要环境变量：GH_TOKEN
  */
 import { execSync } from 'child_process'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
@@ -16,6 +16,17 @@ import { SocksProxyAgent } from 'socks-proxy-agent'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
+
+// 从 .env.local 读取配置
+const envFile = join(root, '.env.local')
+if (existsSync(envFile)) {
+  for (const line of readFileSync(envFile, 'utf-8').split('\n')) {
+    const [key, ...vals] = line.trim().split('=')
+    if (key && !key.startsWith('#') && vals.length) {
+      process.env[key.trim()] = vals.join('=').trim()
+    }
+  }
+}
 
 const GH_TOKEN = process.env.GH_TOKEN
 if (!GH_TOKEN) {
