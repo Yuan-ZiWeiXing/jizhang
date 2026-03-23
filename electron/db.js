@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { join } from 'path'
+import { createHash } from 'crypto'
 
 const DEFAULT_CATEGORIES = [
   { id: 'food', name: '餐饮', icon: 'pi-shopping-cart', type: 'expense', color: '#ff9500' },
@@ -104,6 +105,13 @@ export function createDb(userDataPath) {
     db.exec("UPDATE funds SET status = '待出账' WHERE IFNULL(out_amount, 0) = 0 AND IFNULL(settled, 0) = 0")
     db.exec("UPDATE funds SET status = '待结算' WHERE IFNULL(settled, 0) = 0 AND IFNULL(out_amount, 0) > 0")
   } catch(e) {}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `)
 
   // Seed categories if empty
   const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get()
@@ -239,6 +247,25 @@ export function createDb(userDataPath) {
     addDownstreamPrepaidUsed(id, amount) {
       db.prepare('UPDATE downstreams SET prepaid_used = prepaid_used + ? WHERE id = ?').run(amount, id)
       return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
+    },
+    // Lock password
+    hasLockPassword() {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'lock_password'").get()
+      return !!row
+    },
+    setLockPassword(plaintext) {
+      const hash = createHash('sha256').update(plaintext).digest('hex')
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('lock_password', ?)").run(hash)
+      return { ok: true }
+    },
+    verifyLockPassword(plaintext) {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'lock_password'").get()
+      if (!row) return false
+      return row.value === createHash('sha256').update(plaintext).digest('hex')
+    },
+    removeLockPassword() {
+      db.prepare("DELETE FROM settings WHERE key = 'lock_password'").run()
+      return { ok: true }
     },
   }
 }

@@ -51,4 +51,10 @@ contextBridge.exposeInMainWorld('api', {
   addDownstreamPrepaid: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaid', id, amount),
   addDownstreamPrepaidUsed: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaidUsed', id, amount),
   setDownstreamEnabled: (id, enabled) => ipcRenderer.invoke('downstreams:setEnabled', id, enabled),
+
+  // Lock password
+  hasLockPassword: () => ipcRenderer.invoke('lock:hasPassword'),
+  setLockPassword: (pw) => ipcRenderer.invoke('lock:setPassword', pw),
+  verifyLockPassword: (pw) => ipcRenderer.invoke('lock:verify', pw),
+  removeLockPassword: () => ipcRenderer.invoke('lock:removePassword'),
 })

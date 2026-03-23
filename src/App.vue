@@ -1,5 +1,13 @@
 <template>
-  <div class="mac-window">
+  <LockScreen
+    v-if="locked"
+    :hasPassword="hasPassword"
+    @unlocked="onUnlocked"
+    @minimize="winMinimize"
+    @maximize="winMaximize"
+    @close="winClose"
+  />
+  <div v-else class="mac-window">
     <!-- Title Bar -->
     <div class="mac-titlebar">
       <div class="mac-titlebar-left">
@@ -9,6 +17,9 @@
       </div>
       <div class="mac-title">紫微星记账工具</div>
       <div class="mac-controls">
+        <button class="mac-icon-btn" @click="lockApp" title="锁屏">
+          <i class="pi pi-lock"></i>
+        </button>
         <span class="mac-btn mac-minimize" @click="winMinimize" title="最小化"></span>
         <span class="mac-btn mac-maximize" @click="winMaximize" title="最大化"></span>
         <span class="mac-btn mac-close" @click="winClose" title="关闭"></span>
@@ -99,18 +110,37 @@ import One4AllView from './views/One4AllView.vue'
 import DownstreamView from './views/DownstreamView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
+import LockScreen from './components/LockScreen.vue'
 import ConfirmDialog from 'primevue/confirmdialog'
 
 const { initStore } = useStore()
 
 const appVersion = ref('')
+const locked = ref(true)
+const hasPassword = ref(false)
 
 onMounted(async () => {
   initStore()
   if (window.api) {
     appVersion.value = await window.api.getVersion()
+    hasPassword.value = await window.api.hasLockPassword()
+    locked.value = hasPassword.value
+  } else {
+    locked.value = false
   }
 })
+
+function onUnlocked() {
+  locked.value = false
+  hasPassword.value = true
+}
+
+async function lockApp() {
+  if (window.api) {
+    hasPassword.value = await window.api.hasLockPassword()
+  }
+  locked.value = true
+}
 
 function checkUpdate() {
   if (window.api) window.api.checkForUpdate()

@@ -170,4 +170,10 @@ function setupIpc() {
   ipcMain.handle('downstreams:setEnabled', (_, id, enabled) => db.setDownstreamEnabled(id, enabled))
   ipcMain.handle('downstreams:addPrepaid', (_, id, amount) => db.addDownstreamPrepaid(id, amount))
   ipcMain.handle('downstreams:addPrepaidUsed', (_, id, amount) => db.addDownstreamPrepaidUsed(id, amount))
+
+  // Lock password
+  ipcMain.handle('lock:hasPassword', () => db.hasLockPassword())
+  ipcMain.handle('lock:setPassword', (_, pw) => db.setLockPassword(pw))
+  ipcMain.handle('lock:verify', (_, pw) => db.verifyLockPassword(pw))
+  ipcMain.handle('lock:removePassword', () => db.removeLockPassword())
 }
