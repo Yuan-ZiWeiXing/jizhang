@@ -35,9 +35,10 @@ if (!GH_TOKEN) {
   process.exit(1)
 }
 
-// 代理仅用于 GitHub API（Node.js），git push 走本地网络
-const SOCKS_PROXY = process.env.SOCKS_PROXY || 'socks5://127.0.0.1:7898'
-const agent = new SocksProxyAgent(SOCKS_PROXY)
+// GitHub API 默认直连。若需走 SOCKS，设置环境变量：GITHUB_SOCKS_PROXY=socks5://127.0.0.1:7898
+const githubAgent = process.env.GITHUB_SOCKS_PROXY
+  ? new SocksProxyAgent(process.env.GITHUB_SOCKS_PROXY)
+  : undefined
 const OWNER = 'Yuan-ZiWeiXing'
 const REPO = 'jizhang'
 const bumpType = process.argv[2] || 'patch'
@@ -119,7 +120,8 @@ function githubApi(method, path, body) {
     const data = JSON.stringify(body)
     const req = https.request({
       hostname: 'api.github.com',
-      path, method, agent,
+      path, method,
+      ...(githubAgent ? { agent: githubAgent } : {}),
       headers: {
         'Authorization': `token ${GH_TOKEN}`,
         'User-Agent': 'jizhang-release',
