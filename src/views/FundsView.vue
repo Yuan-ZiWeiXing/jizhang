@@ -49,7 +49,7 @@
           <Select v-model="statsStatus" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
         </div>
         <div class="filter-item">
-          <label>出给谁</label>
+          <label>出货商</label>
           <InputText v-model="statsOutTo" placeholder="搜索..." class="filter-text" />
         </div>
         <Button v-if="hasStatsFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearStatsFilters" />
@@ -103,7 +103,7 @@
       </div>
 
       <div class="fs-section" v-if="statsData.byOutTo.length">
-        <div class="fs-section-title">按出账对象统计</div>
+        <div class="fs-section-title">按出货商统计</div>
         <div class="fs-group-list">
           <div v-for="o in statsData.byOutTo" :key="o.name" class="fs-group-row">
             <span class="fs-group-name">{{ o.name }}</span>
@@ -180,7 +180,7 @@
         <Select v-model="filterStatus" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
       </div>
       <div class="filter-item">
-        <label>出给谁</label>
+        <label>出货商</label>
         <InputText v-model="filterOutTo" placeholder="搜索..." class="filter-text" />
       </div>
       <Button v-if="hasActiveFilter" label="清除筛选" icon="pi pi-filter-slash" text size="small" @click="clearFilters" />
@@ -373,8 +373,8 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>出给谁</label>
-          <InputText v-model="editForm.out_to" class="w-full" placeholder="输入出账对象" />
+          <label>出货商</label>
+          <InputText v-model="editForm.out_to" class="w-full" placeholder="输入出货商" />
         </div>
         <div class="form-grid" style="margin-top:4px">
           <div class="form-field">
@@ -410,8 +410,8 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>出给谁</label>
-          <InputText v-model="batchEditForm.out_to" class="w-full" placeholder="输入出账对象" />
+          <label>出货商</label>
+          <InputText v-model="batchEditForm.out_to" class="w-full" placeholder="输入出货商" />
         </div>
         <div class="form-field">
           <label>出账汇率</label>
@@ -468,18 +468,11 @@
     <!-- Export Dialog -->
     <Dialog v-model:visible="showExport" modal header="导出数据" :style="{width:'460px'}" :draggable="false">
       <div class="export-body">
-        <div class="form-field">
-          <label>分组</label>
-          <Select v-model="exportGroup" :options="exportGroupOptions" optionLabel="name" optionValue="id" placeholder="全部分组" showClear class="w-full" style="margin-top:4px" />
+        <div class="export-hint" v-if="selectedFunds.length">
+          将导出已选中的 <strong>{{ selectedFunds.length }}</strong> 条记录
         </div>
-        <div class="form-field" style="margin-top:14px">
-          <label>时间范围</label>
-          <div class="export-range">
-            <DatePicker v-model="exportStart" dateFormat="yy-mm-dd" placeholder="开始日期" showIcon />
-            <span style="color:var(--mac-text-secondary)">至</span>
-            <DatePicker v-model="exportEnd" dateFormat="yy-mm-dd" placeholder="结束日期" showIcon />
-            <Button label="全部" text size="small" @click="exportStart=null;exportEnd=null" />
-          </div>
+        <div class="export-hint" v-else>
+          将导出当前列表的 <strong>{{ filteredFunds.length }}</strong> 条记录（可先勾选要导出的记录）
         </div>
         <div class="form-field" style="margin-top:14px">
           <label>导出字段</label>
@@ -493,7 +486,7 @@
       </div>
       <template #footer>
         <Button label="取消" text @click="showExport = false" />
-        <Button label="导出 CSV" icon="pi pi-file" @click="doExport" />
+        <Button label="导出 Excel" icon="pi pi-file-excel" @click="doExport" />
       </template>
     </Dialog>
     <!-- Add Group Dialog -->
@@ -536,6 +529,7 @@ import ContextMenu from 'primevue/contextmenu'
 import Checkbox from 'primevue/checkbox'
 import DatePicker from 'primevue/datepicker'
 import { useToast } from 'primevue/usetoast'
+import * as XLSX from 'xlsx'
 
 const toast = useToast()
 
@@ -716,10 +710,6 @@ const quickInput = ref('')
 const editForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' })
 const editId = ref(null)
 
-const exportStart = ref(null)
-const exportEnd = ref(null)
-const exportGroup = ref(null)
-const exportGroupOptions = computed(() => groups.value)
 const exportFields = ref([
   { key: 'record_date', label: '记录日期', checked: true },
   { key: 'group', label: '分组', checked: true },
@@ -734,7 +724,7 @@ const exportFields = ref([
   { key: 'out_rate', label: '出账汇率', checked: true },
   { key: 'out_total', label: '出账合计', checked: true },
   { key: 'out_date', label: '出账日期', checked: true },
-  { key: 'out_to', label: '出给谁', checked: true },
+  { key: 'out_to', label: '出货商', checked: true },
   { key: 'profit', label: '盈利', checked: true },
 ])
 
@@ -995,38 +985,46 @@ async function batchDelete() {
   toast.add({ severity: 'info', summary: `已删除 ${count} 条记录`, life: 2000 })
 }
 
-async function doExport() {
-  let data
-  if (exportStart.value || exportEnd.value) {
-    const s = exportStart.value ? fmtDate(exportStart.value) : '0000-01-01'
-    const e = exportEnd.value ? fmtDate(exportEnd.value) : '9999-12-31'
-    data = window.api ? await window.api.getFundsByDateRange(s, e) : []
-  } else if (exportGroup.value !== null && exportGroup.value !== undefined) {
-    data = window.api ? await window.api.getFundsByGroup(exportGroup.value) : []
-  } else {
-    data = window.api ? await window.api.getAllFunds() : []
-  }
+function doExport() {
+  const data = selectedFunds.value.length ? selectedFunds.value : filteredFunds.value
+  if (!data.length) { toast.add({ severity: 'warn', summary: '没有可导出的数据', life: 2000 }); return }
+
   const fields = exportFields.value.filter(f => f.checked)
-  const header = fields.map(f => f.label).join(',')
   const rows = data.map(row => {
-    return fields.map(f => {
-      if (f.key === 'profit') return profit(row).toFixed(2)
-      if (f.key === 'group') return groupName(row.group_id)
-      if (f.key === 'in_total') return (row.in_amount * row.in_rate).toFixed(2)
-      if (f.key === 'out_total') return row.out_amount ? (row.out_amount * row.out_rate).toFixed(2) : ''
-      return String(row[f.key] ?? '')
-    }).join(',')
+    const obj = {}
+    for (const f of fields) {
+      let val
+      if (f.key === 'profit') val = profit(row).toFixed(2)
+      else if (f.key === 'group') val = groupName(row.group_id)
+      else if (f.key === 'in_total') val = (row.in_amount * row.in_rate).toFixed(2)
+      else if (f.key === 'out_total') val = row.out_amount ? (row.out_amount * row.out_rate).toFixed(2) : ''
+      else if (f.key === 'card_no') val = String(row.card_no ?? '')
+      else if (f.key === 'card_date') val = String(row.card_date ?? '')
+      else if (f.key === 'cvv') val = String(row.cvv ?? '')
+      else val = row[f.key] ?? ''
+      obj[f.label] = val
+    }
+    return obj
   })
-  const csv = [header, ...rows].join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `资金记录_${new Date().toISOString().slice(0,10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+
+  const colWidths = fields.map(f => {
+    if (f.key === 'card_no') return { wch: 22 }
+    if (f.key === 'card_date' || f.key === 'cvv') return { wch: 10 }
+    if (f.key === 'record_date' || f.key === 'out_date') return { wch: 14 }
+    if (f.key === 'group' || f.key === 'status') return { wch: 10 }
+    if (f.key === 'out_to') return { wch: 14 }
+    return { wch: 14 }
+  })
+  ws['!cols'] = colWidths
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '资金记录')
+  XLSX.writeFile(wb, `资金记录_${new Date().toISOString().slice(0,10)}.xlsx`)
+
   showExport.value = false
-  toast.add({ severity: 'success', summary: '导出成功', life: 2000 })
+  toast.add({ severity: 'success', summary: `已导出 ${data.length} 条记录`, life: 2000 })
 }
 
 function fmtDate(d) {
@@ -1210,7 +1208,7 @@ function fmtDate(d) {
 .w-full { width: 100%; box-sizing: border-box; }
 
 .export-body { display: flex; flex-direction: column; gap: 12px; }
-.export-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.export-hint { font-size: 13px; color: var(--mac-text-secondary); padding: 4px 0; }
 .field-checks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
 .field-check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 
