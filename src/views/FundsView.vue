@@ -76,6 +76,16 @@
           <div class="fs-card-label">总盈利(¥)</div>
           <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(statsData.totalProfit) }}</div>
         </div>
+        <div class="fs-card">
+          <div class="fs-card-label">未结算</div>
+          <div class="fs-card-val unsettled">{{ statsData.unsettledCount }} 笔 / ¥{{ fmtNum(statsData.unsettledAmount) }}</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">结算率</div>
+          <div class="fs-card-val settle-rate">{{ statsData.settleRate }}%</div>
+          <div class="settle-progress"><div class="settle-progress-fill" :style="{ width: statsData.settleRate + '%' }"></div></div>
+          <div class="fs-card-sub">{{ statsData.doneCount }} / {{ statsData.totalCount }}</div>
+        </div>
       </div>
 
       <div class="fs-section">
@@ -105,6 +115,10 @@
             <div class="fs-cur-row">
               <span class="fs-cur-label">盈利(¥)</span>
               <span class="fs-cur-val" :class="cs.profit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(cs.profit) }}</span>
+            </div>
+            <div v-if="cs.unsettledRmb" class="fs-cur-row">
+              <span class="fs-cur-label">未结算(¥)</span>
+              <span class="fs-cur-val unsettled">¥{{ fmtNum(cs.unsettledRmb) }}</span>
             </div>
           </div>
         </div>
@@ -222,10 +236,6 @@
         <label>出货商</label>
         <InputText v-model="dtFilters.out_to.value" placeholder="搜索..." class="filter-text" />
       </div>
-      <div class="filter-item">
-        <label>结算</label>
-        <Select v-model="settledFilter" :options="settledOptions" optionLabel="label" optionValue="value" placeholder="全部" showClear class="filter-select" />
-      </div>
       <Button v-if="hasManageFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearManageFilters" />
     </div>
 
@@ -233,8 +243,8 @@
     <div v-if="selectedFunds.length" class="batch-bar">
       <span class="batch-info">已选 {{ selectedFunds.length }} 项</span>
       <Button label="批量出账" icon="pi pi-pencil" size="small" @click="openBatchEdit" />
-      <Button label="标记已结" icon="pi pi-check-circle" size="small" severity="success" @click="batchToggleSettled(true)" />
-      <Button label="标记未结" icon="pi pi-circle" size="small" severity="secondary" @click="batchToggleSettled(false)" />
+      <Button label="标记已完成" icon="pi pi-check-circle" size="small" severity="success" @click="batchToggleSettled(true)" />
+      <Button label="取消完成" icon="pi pi-circle" size="small" severity="secondary" @click="batchToggleSettled(false)" />
       <Button label="批量删除" icon="pi pi-trash" size="small" severity="danger" @click="batchDelete" />
       <Button label="取消选择" text size="small" @click="selectedFunds = []" />
     </div>
@@ -366,6 +376,11 @@
         <span class="stat-val">{{ pendingCount }} 条</span>
       </div>
       <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">未结算</span>
+        <span class="stat-val unsettled">{{ unsettledCount }} 条 / ¥{{ fmtNum(unsettledAmount) }}</span>
+      </div>
+      <div class="stat-divider"></div>
       <div v-for="cs in currencyStats" :key="cs.currency" class="stat-currency-group">
         <span class="stat-currency-tag">{{ cs.currency }}</span>
         <span class="stat-val income">进 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.inAmount) }}</span>
@@ -383,6 +398,11 @@
       <div class="stat-item">
         <span class="stat-label">总盈利(¥)</span>
         <span class="stat-val" :class="totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(totalProfit) }}</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">已完成</span>
+        <span class="stat-val done">{{ doneCount }} 条</span>
       </div>
     </div>
 
@@ -462,7 +482,16 @@
         </div>
         <div class="form-field">
           <label>出货商</label>
-          <InputText v-model="editForm.out_to" class="w-full" placeholder="输入出货商" />
+          <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
+          <div v-if="selectedDownstream" class="ds-hint">
+            预付剩余：¥{{ fmtNum((selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0)) }}
+            <template v-if="(selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0) > 0">
+              <span class="ds-hint-auto">· 余额充足时自动扣款并标记已完成</span>
+            </template>
+            <template v-else>
+              <span class="ds-hint-warn">· 余额不足，保存后为待结算</span>
+            </template>
+          </div>
         </div>
         <div class="form-grid" style="margin-top:4px">
           <div class="form-field">
@@ -499,13 +528,13 @@
         </div>
         <div class="form-field">
           <label>出货商</label>
-          <InputText v-model="batchEditForm.out_to" class="w-full" placeholder="输入出货商" />
+          <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
         </div>
         <div class="form-field">
           <label>出账汇率</label>
           <InputNumber v-model="batchEditForm.out_rate" class="w-full" :minFractionDigits="4" />
         </div>
-        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额</div>
+        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额。选择出货商后，预付余额内的记录自动结算。</div>
       </div>
       <template #footer>
         <Button label="取消" text @click="showBatchEdit = false" />
@@ -662,6 +691,7 @@ const currencyOptions = [
 const funds = ref([])
 const allFunds = ref([])
 const groups = ref([])
+const downstreams = ref([])
 const activeGroup = ref(null)
 const loading = ref(false)
 const showAdd = ref(false)
@@ -686,10 +716,10 @@ const ctxGroup = ref(null)
 const selectedFunds = ref([])
 const pageRows = ref(50)
 const showBatchEdit = ref(false)
-const batchEditForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' })
+const batchEditForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '', downstream_id: null })
 
 const currencyFilterOptions = ['USD', 'EUR', 'AUD', 'CAD']
-const statusOptions = ['待出账', '盈利', '亏损']
+const statusOptions = ['待出账', '待结算', '已完成']
 
 const dtFilters = ref({
   currency: { value: null, matchMode: FilterMatchMode.EQUALS },
@@ -700,17 +730,10 @@ const dtFilters = ref({
 
 const filterDateRange = ref(null)
 const filterOutDateRange = ref(null)
-const settledFilter = ref(null)
-const settledOptions = [
-  { label: '已结算', value: 1 },
-  { label: '未结算', value: 0 },
-]
-
 const hasManageFilter = computed(() =>
   filterDateRange.value || filterOutDateRange.value ||
   dtFilters.value.currency.value || dtFilters.value.card_no.value ||
-  dtFilters.value.status.value || dtFilters.value.out_to.value ||
-  settledFilter.value !== null
+  dtFilters.value.status.value || dtFilters.value.out_to.value
 )
 
 function clearManageFilters() {
@@ -720,7 +743,6 @@ function clearManageFilters() {
   dtFilters.value.card_no.value = null
   dtFilters.value.status.value = null
   dtFilters.value.out_to.value = null
-  settledFilter.value = null
 }
 
 const filteredFunds = computed(() => {
@@ -746,9 +768,6 @@ const filteredFunds = computed(() => {
     const kw = cf.out_to.value.toLowerCase()
     list = list.filter(f => (f.out_to || '').toLowerCase().includes(kw))
   }
-  if (settledFilter.value !== null) {
-    list = list.filter(f => (f.settled || 0) === settledFilter.value)
-  }
   return list
 })
 
@@ -756,6 +775,9 @@ const totalIn = computed(() => filteredFunds.value.reduce((s, f) => s + f.in_amo
 const totalOut = computed(() => filteredFunds.value.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0))
 const totalProfit = computed(() => totalOut.value - totalIn.value)
 const pendingCount = computed(() => filteredFunds.value.filter(f => f.status === '待出账').length)
+const unsettledCount = computed(() => filteredFunds.value.filter(f => f.status === '待结算').length)
+const unsettledAmount = computed(() => filteredFunds.value.filter(f => f.status === '待结算').reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0))
+const doneCount = computed(() => filteredFunds.value.filter(f => f.status === '已完成').length)
 
 const groupPendingMap = computed(() => {
   const map = {}
@@ -881,20 +903,27 @@ const statsData = computed(() => {
 
   const curMap = {}
   for (const cur of allCurrencies) {
-    curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+    curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0, unsettledRmb: 0 }
   }
   for (const f of all) {
     const cur = f.currency || 'USD'
-    if (!curMap[cur]) curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+    if (!curMap[cur]) curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0, unsettledRmb: 0 }
     curMap[cur].inAmount += f.in_amount
     curMap[cur].outAmount += (f.out_amount || 0)
     curMap[cur].inRmb += f.in_amount * f.in_rate
     curMap[cur].outRmb += (f.out_amount || 0) * (f.out_rate || 1)
     curMap[cur].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+    if (f.status === '待结算') curMap[cur].unsettledRmb += (f.out_amount || 0) * (f.out_rate || 1)
   }
   const byCurrency = allCurrencies.map(cur => curMap[cur])
 
-  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency }
+  const unsettled = all.filter(f => f.status === '待结算')
+  const unsettledCount = unsettled.length
+  const unsettledAmount = unsettled.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0)
+  const doneCount = all.filter(f => f.status === '已完成').length
+  const settleRate = all.length ? Math.round(doneCount / all.length * 100) : 0
+
+  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency, unsettledCount, unsettledAmount, doneCount, settleRate }
 })
 
 const dailyChartCanvas = ref(null)
@@ -929,19 +958,27 @@ const dailyChartData = computed(() => {
       d.setDate(d.getDate() - i)
       labels.push(d.toISOString().slice(0, 10))
     }
+    const profitArr = labels.map(d => (dayMap[d]?.profit || 0))
+    let cum = 0
+    const cumProfitData = profitArr.map(p => { cum += p; return cum })
     return {
       labels: labels.map(d => d.slice(5)),
       inData: labels.map(d => (dayMap[d]?.inRmb || 0)),
       outData: labels.map(d => (dayMap[d]?.outRmb || 0)),
-      profitData: labels.map(d => (dayMap[d]?.profit || 0)),
+      profitData: profitArr,
+      cumProfitData,
     }
   }
 
+  const profitArr = entries.map(([, v]) => v.profit)
+  let cum = 0
+  const cumProfitData = profitArr.map(p => { cum += p; return cum })
   return {
     labels: entries.map(([d]) => d.slice(5)),
     inData: entries.map(([, v]) => v.inRmb),
     outData: entries.map(([, v]) => v.outRmb),
-    profitData: entries.map(([, v]) => v.profit),
+    profitData: profitArr,
+    cumProfitData,
   }
 })
 
@@ -958,6 +995,7 @@ function renderDailyChart() {
         { label: '进账(¥)', data: d.inData, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
         { label: '出账(¥)', data: d.outData, borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
         { label: '盈利(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '累计盈利(¥)', data: d.cumProfitData, borderColor: '#af52de', backgroundColor: 'rgba(175,82,222,0.08)', tension: 0.35, fill: false, pointRadius: 2, borderWidth: 2, borderDash: [5, 3] },
       ],
     },
     options: {
@@ -982,8 +1020,29 @@ onBeforeUnmount(() => { if (dailyChartInstance) dailyChartInstance.destroy() })
 
 const form = ref(emptyForm())
 const quickInput = ref('')
-const editForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' })
+const editForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '', downstream_id: null })
 const editId = ref(null)
+
+const downstreamOptions = computed(() =>
+  downstreams.value.map(d => ({ label: d.name, value: d.id }))
+)
+const selectedDownstream = computed(() =>
+  editForm.value.downstream_id ? downstreams.value.find(d => d.id === editForm.value.downstream_id) : null
+)
+
+watch(() => editForm.value.downstream_id, (dsId) => {
+  if (dsId) {
+    const ds = downstreams.value.find(d => d.id === dsId)
+    if (ds) editForm.value.out_to = ds.name
+  }
+})
+
+watch(() => batchEditForm.value.downstream_id, (dsId) => {
+  if (dsId) {
+    const ds = downstreams.value.find(d => d.id === dsId)
+    if (ds) batchEditForm.value.out_to = ds.name
+  }
+})
 
 const exportFields = ref([
   { key: 'record_date', label: '记录日期', checked: true },
@@ -1025,8 +1084,13 @@ function onGroupCtx(event, group) {
 onMounted(async () => {
   await loadGroups()
   await loadAllFunds()
+  await loadDownstreams()
   await load()
 })
+
+async function loadDownstreams() {
+  downstreams.value = window.api ? await window.api.getAllDownstreams() : []
+}
 
 async function loadAllFunds() {
   if (!window.api) { allFunds.value = []; return }
@@ -1102,8 +1166,8 @@ const currencySymbolMap = { USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' }
 function currencySymbol(cur) { return currencySymbolMap[cur] || '$' }
 
 function statusClass(status) {
-  if (status === '盈利') return 'status-profit'
-  if (status === '亏损') return 'status-loss'
+  if (status === '已完成') return 'status-done'
+  if (status === '待结算') return 'status-settle'
   return 'status-pending'
 }
 
@@ -1125,6 +1189,7 @@ function openEdit() {
     out_rate: ctxRow.value.out_rate,
     out_date: ctxRow.value.out_date ? new Date(ctxRow.value.out_date) : new Date(),
     out_to: ctxRow.value.out_to || '',
+    downstream_id: ctxRow.value.downstream_id || null,
   }
   showEdit.value = true
 }
@@ -1226,21 +1291,30 @@ async function submitEdit() {
   if (!window.api) return
   const outAmt = Number(editForm.value.out_amount) || 0
   const outRate = Number(editForm.value.out_rate) || 1
-  const fund = funds.value.find(f => f.id === editId.value)
-  const inTotal = fund ? fund.in_amount * fund.in_rate : 0
-  const outTotal = outAmt * outRate
-  const autoStatus = outAmt > 0 ? (outTotal >= inTotal ? '盈利' : '亏损') : '待出账'
+  const dsId = editForm.value.downstream_id || null
+  const ds = dsId ? downstreams.value.find(d => d.id === dsId) : null
+  const outRmb = outAmt * outRate
+  const dsRemaining = ds ? (ds.prepaid || 0) - (ds.prepaid_used || 0) : 0
+  const canAutoSettle = ds && outAmt > 0 && dsRemaining >= outRmb
+  const autoSettled = canAutoSettle ? 1 : 0
+  const autoStatus = autoSettled ? '已完成' : (outAmt > 0 ? '待结算' : '待出账')
   const updated = await window.api.updateFundOut(editId.value, {
     out_amount: outAmt,
     out_rate: outRate,
     out_date: editForm.value.out_date ? fmtDate(editForm.value.out_date) : '',
     out_to: editForm.value.out_to || '',
     status: autoStatus,
+    downstream_id: dsId,
+    settled: autoSettled,
   })
+  if (canAutoSettle) {
+    await window.api.addDownstreamPrepaidUsed(dsId, outRmb)
+    await loadDownstreams()
+  }
   const idx = funds.value.findIndex(f => f.id === editId.value)
   if (idx !== -1) funds.value[idx] = updated
   showEdit.value = false
-  toast.add({ severity: 'success', summary: '已更新', life: 2000 })
+  toast.add({ severity: 'success', summary: autoSettled ? '已出账并自动结算' : '已更新', life: 2000 })
   refreshAllFunds()
 }
 
@@ -1264,7 +1338,7 @@ function deleteFund(id) {
 }
 
 function openBatchEdit() {
-  batchEditForm.value = { out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' }
+  batchEditForm.value = { out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '', downstream_id: null }
   showBatchEdit.value = true
 }
 
@@ -1272,22 +1346,38 @@ async function submitBatchEdit() {
   if (!window.api || !selectedFunds.value.length) return
   const outRate = Number(batchEditForm.value.out_rate) || 1
   const outDate = batchEditForm.value.out_date ? fmtDate(batchEditForm.value.out_date) : ''
-  const outTo = batchEditForm.value.out_to || ''
+  const dsId = batchEditForm.value.downstream_id || null
+  const ds = dsId ? downstreams.value.find(d => d.id === dsId) : null
+  const outTo = ds ? ds.name : ''
+  let dsRemaining = ds ? (ds.prepaid || 0) - (ds.prepaid_used || 0) : 0
+  let settledCount = 0
   const count = selectedFunds.value.length
   for (const f of selectedFunds.value) {
     const outAmt = f.in_amount || 0
-    const inTotal = f.in_amount * f.in_rate
-    const outTotal = outAmt * outRate
-    const autoStatus = outAmt > 0 ? (outTotal >= inTotal ? '盈利' : '亏损') : '待出账'
+    const outRmb = outAmt * outRate
+    const canSettle = ds && outAmt > 0 && dsRemaining >= outRmb
+    const settled = canSettle ? 1 : 0
+    const autoStatus = settled ? '已完成' : (outAmt > 0 ? '待结算' : '待出账')
+    if (canSettle) {
+      dsRemaining -= outRmb
+      settledCount++
+    }
     const updated = await window.api.updateFundOut(f.id, {
-      out_amount: outAmt, out_rate: outRate, out_date: outDate, out_to: outTo, status: autoStatus,
+      out_amount: outAmt, out_rate: outRate, out_date: outDate, out_to: outTo,
+      status: autoStatus, downstream_id: dsId, settled,
     })
     const idx = funds.value.findIndex(r => r.id === f.id)
     if (idx !== -1) funds.value[idx] = updated
   }
+  if (ds && settledCount > 0) {
+    const totalDeducted = (ds.prepaid - ds.prepaid_used) - dsRemaining
+    await window.api.addDownstreamPrepaidUsed(dsId, totalDeducted)
+    await loadDownstreams()
+  }
   showBatchEdit.value = false
   selectedFunds.value = []
-  toast.add({ severity: 'success', summary: `已更新 ${count} 条出账记录`, life: 2000 })
+  const msg = settledCount > 0 ? `已更新 ${count} 条，其中 ${settledCount} 条自动结算` : `已更新 ${count} 条出账记录`
+  toast.add({ severity: 'success', summary: msg, life: 3000 })
   refreshAllFunds()
 }
 
@@ -1318,19 +1408,27 @@ function batchDelete() {
 async function toggleSettled(fund) {
   if (!window.api) return
   const newVal = fund.settled ? 0 : 1
-  await window.api.updateFundSettled(fund.id, newVal)
-  fund.settled = newVal
+  const updated = await window.api.updateFundSettled(fund.id, newVal)
+  fund.settled = updated.settled
+  fund.status = updated.status
   const af = allFunds.value.find(f => f.id === fund.id)
-  if (af) af.settled = newVal
+  if (af) { af.settled = updated.settled; af.status = updated.status }
 }
 
 async function batchToggleSettled(settled) {
   if (!window.api || !selectedFunds.value.length) return
   const ids = selectedFunds.value.map(f => f.id)
   await window.api.batchUpdateSettled(ids, settled)
-  for (const f of selectedFunds.value) f.settled = settled ? 1 : 0
+  const newSettled = settled ? 1 : 0
+  for (const f of selectedFunds.value) {
+    f.settled = newSettled
+    f.status = newSettled ? '已完成' : (f.out_amount > 0 ? '待结算' : '待出账')
+  }
   for (const f of allFunds.value) {
-    if (ids.includes(f.id)) f.settled = settled ? 1 : 0
+    if (ids.includes(f.id)) {
+      f.settled = newSettled
+      f.status = newSettled ? '已完成' : (f.out_amount > 0 ? '待结算' : '待出账')
+    }
   }
   toast.add({ severity: 'success', summary: `已${settled ? '结算' : '取消结算'} ${ids.length} 条`, life: 2000 })
   selectedFunds.value = []
@@ -1352,7 +1450,7 @@ function doExport() {
       else if (f.key === 'card_no') val = String(row.card_no ?? '')
       else if (f.key === 'card_date') val = String(row.card_date ?? '')
       else if (f.key === 'cvv') val = String(row.cvv ?? '')
-      else if (f.key === 'settled') val = row.settled ? '已结算' : '未结算'
+      else if (f.key === 'settled') val = row.status || '待出账'
       else val = row[f.key] ?? ''
       obj[f.label] = val
     }
@@ -1599,6 +1697,12 @@ function fmtDate(d) {
 .stat-item { display: flex; align-items: center; gap: 6px; }
 .stat-label { font-size: 12px; color: var(--mac-text-secondary); font-weight: 500; }
 .stat-val { font-size: 14px; font-weight: 700; color: var(--mac-text); }
+.stat-val.unsettled, .fs-card-val.unsettled, .fs-cur-val.unsettled { color: #e67e22; }
+.stat-val.done { color: #155724; }
+.fs-card-val.settle-rate { color: var(--mac-accent, #007aff); }
+.settle-progress { width: 100%; height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.settle-progress-fill { height: 100%; background: #34c759; border-radius: 2px; transition: width 0.4s ease; }
+.fs-card-sub { font-size: 11px; color: var(--mac-text-secondary); margin-top: 3px; }
 .group-hint { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mac-text-secondary); gap: 8px; }
 .group-hint i { font-size: 36px; }
 .group-hint p { font-size: 13px; }
@@ -1647,8 +1751,8 @@ function fmtDate(d) {
   font-size: 12px; font-weight: 600; text-align: center;
 }
 .status-pending { background: #fff3cd; color: #856404; }
-.status-profit { background: #d4edda; color: #155724; }
-.status-loss { background: #f8d7da; color: #721c24; }
+.status-settle { background: #cce5ff; color: #004085; }
+.status-done { background: #d4edda; color: #155724; }
 
 .dt-filter-input { width: 100%; font-size: 12px; }
 .dt-filter-select { width: 100%; font-size: 12px; }
@@ -1667,6 +1771,9 @@ function fmtDate(d) {
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form-field { display: flex; flex-direction: column; gap: 4px; }
 .form-field label { font-size: 11px; font-weight: 600; color: var(--mac-text-secondary); text-transform: uppercase; }
+.ds-hint { font-size: 12px; color: var(--mac-text-secondary); margin-top: 2px; }
+.ds-hint-auto { color: #34c759; font-weight: 500; }
+.ds-hint-warn { color: #e67e22; font-weight: 500; }
 .w-full { width: 100%; box-sizing: border-box; }
 
 .export-body { display: flex; flex-direction: column; gap: 12px; }

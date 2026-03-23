@@ -60,6 +60,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useStore } from './store.js'
 import DashboardView from './views/DashboardView.vue'
 import FundsView from './views/FundsView.vue'
+import DownstreamView from './views/DownstreamView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -85,10 +86,11 @@ const showAddDialog = ref(false)
 const navItems = [
   { id: 'dashboard', label: '仪表板', icon: 'pi-home' },
   { id: 'funds', label: '资金', icon: 'pi-credit-card' },
+  { id: 'downstream', label: '出货商', icon: 'pi-users' },
 ]
 
 const currentComponent = computed(() => {
-  const map = { dashboard: DashboardView, funds: FundsView }
+  const map = { dashboard: DashboardView, funds: FundsView, downstream: DownstreamView }
   return map[currentView.value]
 })
 

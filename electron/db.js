@@ -50,6 +50,14 @@ export function createDb(userDataPath) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS downstreams (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      prepaid REAL DEFAULT 0,
+      prepaid_used REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS funds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       group_id INTEGER DEFAULT NULL,
@@ -79,10 +87,16 @@ export function createDb(userDataPath) {
   try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN currency TEXT DEFAULT 'USD'") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN settled INTEGER DEFAULT 0") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN downstream_id INTEGER DEFAULT NULL") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid_used REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups DROP COLUMN prepaid_offset") } catch(e) {}
 
+  try {
+    db.exec("UPDATE funds SET status = '已完成' WHERE settled = 1 AND status != '已完成'")
+    db.exec("UPDATE funds SET status = '待结算' WHERE settled = 0 AND out_amount > 0 AND status NOT IN ('待结算')")
+    db.exec("UPDATE funds SET status = '待出账' WHERE out_amount = 0 AND status NOT IN ('待出账')")
+  } catch(e) {}
 
   // Seed categories if empty
   const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get()
@@ -134,17 +148,18 @@ export function createDb(userDataPath) {
       const result = stmt.run(group_id || null, card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1, record_date || '', currency || 'USD')
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(result.lastInsertRowid)
     },
-    updateFundOut(id, { out_amount, out_rate, out_date, out_to, status }) {
-      db.prepare('UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=? WHERE id=?').run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', id)
+    updateFundOut(id, { out_amount, out_rate, out_date, out_to, status, downstream_id, settled }) {
+      db.prepare('UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=?, downstream_id=?, settled=? WHERE id=?')
+        .run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', downstream_id ?? null, settled ?? 0, id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
     updateFundSettled(id, settled) {
-      db.prepare('UPDATE funds SET settled = ? WHERE id = ?').run(settled ? 1 : 0, id)
+      db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END WHERE id = ?`).run(settled ? 1 : 0, settled ? 1 : 0, id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
     batchUpdateSettled(ids, settled) {
-      const stmt = db.prepare('UPDATE funds SET settled = ? WHERE id = ?')
-      const run = db.transaction((list) => { for (const id of list) stmt.run(settled ? 1 : 0, id) })
+      const stmt = db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END WHERE id = ?`)
+      const run = db.transaction((list) => { for (const id of list) stmt.run(settled ? 1 : 0, settled ? 1 : 0, id) })
       run(ids)
       return { ok: true, count: ids.length }
     },
@@ -186,6 +201,31 @@ export function createDb(userDataPath) {
       db.prepare('UPDATE funds SET group_id = NULL WHERE group_id = ?').run(id)
       db.prepare('DELETE FROM fund_groups WHERE id = ?').run(id)
       return { ok: true }
+    },
+    // Downstreams
+    getAllDownstreams() {
+      return db.prepare('SELECT * FROM downstreams ORDER BY created_at ASC').all()
+    },
+    addDownstream(name) {
+      const result = db.prepare('INSERT INTO downstreams (name) VALUES (?)').run(name)
+      return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(result.lastInsertRowid)
+    },
+    updateDownstream(id, name) {
+      db.prepare('UPDATE downstreams SET name = ? WHERE id = ?').run(name, id)
+      return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
+    },
+    deleteDownstream(id) {
+      db.prepare('UPDATE funds SET downstream_id = NULL WHERE downstream_id = ?').run(id)
+      db.prepare('DELETE FROM downstreams WHERE id = ?').run(id)
+      return { ok: true }
+    },
+    addDownstreamPrepaid(id, amount) {
+      db.prepare('UPDATE downstreams SET prepaid = prepaid + ? WHERE id = ?').run(amount, id)
+      return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
+    },
+    addDownstreamPrepaidUsed(id, amount) {
+      db.prepare('UPDATE downstreams SET prepaid_used = prepaid_used + ? WHERE id = ?').run(amount, id)
+      return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
     },
   }
 }

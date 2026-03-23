@@ -42,4 +42,12 @@ contextBridge.exposeInMainWorld('api', {
   deleteFundGroup: (id) => ipcRenderer.invoke('fundGroups:delete', id),
   updateGroupPrepaid: (id, prepaid) => ipcRenderer.invoke('fundGroups:updatePrepaid', id, prepaid),
   addGroupPrepaidUsed: (groupId, amount) => ipcRenderer.invoke('fundGroups:addPrepaidUsed', groupId, amount),
+
+  // Downstreams
+  getAllDownstreams: () => ipcRenderer.invoke('downstreams:getAll'),
+  addDownstream: (name) => ipcRenderer.invoke('downstreams:add', name),
+  updateDownstream: (id, name) => ipcRenderer.invoke('downstreams:update', id, name),
+  deleteDownstream: (id) => ipcRenderer.invoke('downstreams:delete', id),
+  addDownstreamPrepaid: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaid', id, amount),
+  addDownstreamPrepaidUsed: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaidUsed', id, amount),
 })

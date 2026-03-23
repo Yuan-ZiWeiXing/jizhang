@@ -112,13 +112,23 @@
             <span class="fms-val warning">{{ fundsStats.pendingCount }} 条</span>
           </div>
           <div class="fms-item">
-            <span class="fms-label">盈利</span>
-            <span class="fms-val success">{{ fundsStats.profitCount }} 条</span>
+            <span class="fms-label">未结算</span>
+            <span class="fms-val unsettled">{{ fundsStats.unsettledCount }} 条 / ¥{{ fmt(fundsStats.unsettledAmount) }}</span>
           </div>
           <div class="fms-item">
-            <span class="fms-label">亏损</span>
-            <span class="fms-val danger">{{ fundsStats.lossCount }} 条</span>
+            <span class="fms-label">已完成</span>
+            <span class="fms-val success">{{ fundsStats.doneCount }} 条</span>
           </div>
+        </div>
+        <div class="settle-rate-bar" v-if="fundsStats.totalCount">
+          <div class="srb-header">
+            <span class="srb-label">结算进度</span>
+            <span class="srb-pct">{{ fundsStats.settleRate }}%</span>
+          </div>
+          <div class="srb-track">
+            <div class="srb-fill" :style="{ width: fundsStats.settleRate + '%' }"></div>
+          </div>
+          <div class="srb-detail">{{ fundsStats.doneCount }} / {{ fundsStats.totalCount }}</div>
         </div>
       </div>
 
@@ -304,14 +314,18 @@ const fundsStats = computed(() => {
   const all = allFunds.value
   const totalIn = all.reduce((s, f) => s + f.in_amount * f.in_rate, 0)
   const totalOut = all.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0)
+  const unsettled = all.filter(f => f.status === '待结算')
+  const doneCount = all.filter(f => f.status === '已完成').length
   return {
     totalIn,
     totalOut,
     totalProfit: totalOut - totalIn,
     totalCount: all.length,
     pendingCount: all.filter(f => f.status === '待出账').length,
-    profitCount: all.filter(f => f.status === '盈利').length,
-    lossCount: all.filter(f => f.status === '亏损').length,
+    unsettledCount: unsettled.length,
+    unsettledAmount: unsettled.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0),
+    doneCount,
+    settleRate: all.length ? Math.round(doneCount / all.length * 100) : 0,
   }
 })
 
@@ -550,6 +564,17 @@ function doDelete(id) { deleteRecord(id) }
 .fms-item { display: flex; align-items: center; gap: 4px; }
 .fms-label { font-size: 11px; color: var(--mac-text-secondary); }
 .fms-val { font-size: 13px; font-weight: 700; color: var(--mac-text); }
+.fms-val.warning { color: #856404; }
+.fms-val.unsettled { color: #e67e22; }
+.fms-val.success { color: #155724; }
+
+.settle-rate-bar { padding-top: 8px; }
+.srb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.srb-label { font-size: 11px; color: var(--mac-text-secondary); font-weight: 500; }
+.srb-pct { font-size: 13px; font-weight: 700; color: var(--mac-accent, #007aff); }
+.srb-track { height: 6px; background: rgba(0,0,0,0.08); border-radius: 3px; overflow: hidden; }
+.srb-fill { height: 100%; background: linear-gradient(90deg, #34c759, #30d158); border-radius: 3px; transition: width 0.5s ease; }
+.srb-detail { font-size: 10px; color: var(--mac-text-secondary); margin-top: 2px; text-align: right; }
 
 /* Category preview */
 .cat-list-preview { display: flex; flex-direction: column; gap: 5px; }

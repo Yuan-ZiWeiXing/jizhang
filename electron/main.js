@@ -151,4 +151,12 @@ function setupIpc() {
   ipcMain.handle('fundGroups:add', (_, name) => db.addFundGroup(name))
   ipcMain.handle('fundGroups:rename', (_, id, name) => db.renameFundGroup(id, name))
   ipcMain.handle('fundGroups:delete', (_, id) => db.deleteFundGroup(id))
+
+  // Downstreams
+  ipcMain.handle('downstreams:getAll', () => db.getAllDownstreams())
+  ipcMain.handle('downstreams:add', (_, name) => db.addDownstream(name))
+  ipcMain.handle('downstreams:update', (_, id, name) => db.updateDownstream(id, name))
+  ipcMain.handle('downstreams:delete', (_, id) => db.deleteDownstream(id))
+  ipcMain.handle('downstreams:addPrepaid', (_, id, amount) => db.addDownstreamPrepaid(id, amount))
+  ipcMain.handle('downstreams:addPrepaidUsed', (_, id, amount) => db.addDownstreamPrepaidUsed(id, amount))
 }
