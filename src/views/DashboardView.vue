@@ -77,7 +77,7 @@
         <div class="os-header">
           <i class="pi pi-credit-card os-icon"></i>
           <span class="os-title">资金概览</span>
-          <span class="os-sub">全部</span>
+          <span class="os-sub">全部资金记录</span>
         </div>
         <div class="stats-row">
           <div class="stat-card income">
@@ -284,7 +284,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from '../store.js'
 
 const emit = defineEmits(['add'])
@@ -299,8 +299,15 @@ const viewType = ref('expense')
 
 const allFunds = ref([])
 
-onMounted(async () => {
-  if (window.api) allFunds.value = await window.api.getAllFunds()
+async function loadFunds() {
+  if (!window.api) return
+  allFunds.value = await window.api.getAllFunds()
+}
+
+onMounted(loadFunds)
+
+watch(activeTab, (v) => {
+  if (v === 'overview') loadFunds()
 })
 
 const monthRecords = computed(() => recordsByMonth(currentYear.value, currentMonth.value))
@@ -309,7 +316,7 @@ const monthExpense = computed(() => monthRecords.value.filter(r => r.type === 'e
 const monthBalance = computed(() => monthIncome.value - monthExpense.value)
 const recentRecords = computed(() => state.records.slice(0, 10))
 
-// Funds overview stats
+// Funds overview stats（全部资金记录）
 const fundsStats = computed(() => {
   const all = allFunds.value
   const totalIn = all.reduce((s, f) => s + f.in_amount * f.in_rate, 0)
@@ -528,7 +535,7 @@ function doDelete(id) { deleteRecord(id) }
 }
 .os-icon { font-size: 16px; color: var(--mac-accent); }
 .os-title { font-size: 14px; font-weight: 600; color: var(--mac-text); }
-.os-sub { font-size: 11px; color: var(--mac-text-secondary); margin-left: auto; }
+.os-sub { font-size: 11px; color: var(--mac-text-secondary); margin-left: auto; text-align: right; max-width: 55%; }
 
 /* Stats Cards */
 .stats-row {

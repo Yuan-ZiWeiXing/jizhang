@@ -52,7 +52,9 @@ export function createDb(userDataPath) {
 
     CREATE TABLE IF NOT EXISTS downstreams (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER DEFAULT NULL,
       name TEXT NOT NULL,
+      ledger_types TEXT DEFAULT '["funds"]',
       prepaid REAL DEFAULT 0,
       prepaid_used REAL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
@@ -91,11 +93,16 @@ export function createDb(userDataPath) {
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid_used REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups DROP COLUMN prepaid_offset") } catch(e) {}
+  try { db.exec('ALTER TABLE downstreams ADD COLUMN group_id INTEGER DEFAULT NULL') } catch(e) {}
+  try { db.exec(`ALTER TABLE downstreams ADD COLUMN ledger_types TEXT DEFAULT '["funds"]'`) } catch(e) {}
+  try { db.exec(`UPDATE downstreams SET ledger_types = '["funds"]' WHERE ledger_types IS NULL OR ledger_types = ''`) } catch(e) {}
+  try { db.exec('ALTER TABLE downstreams ADD COLUMN enabled INTEGER DEFAULT 1') } catch(e) {}
+  try { db.exec('UPDATE downstreams SET enabled = 1 WHERE enabled IS NULL') } catch(e) {}
 
   try {
-    db.exec("UPDATE funds SET status = '已完成' WHERE settled = 1 AND status != '已完成'")
-    db.exec("UPDATE funds SET status = '待结算' WHERE settled = 0 AND out_amount > 0 AND status NOT IN ('待结算')")
-    db.exec("UPDATE funds SET status = '待出账' WHERE out_amount = 0 AND status NOT IN ('待出账')")
+    db.exec("UPDATE funds SET status = '已完成' WHERE IFNULL(settled, 0) = 1")
+    db.exec("UPDATE funds SET status = '待出账' WHERE IFNULL(out_amount, 0) = 0 AND IFNULL(settled, 0) = 0")
+    db.exec("UPDATE funds SET status = '待结算' WHERE IFNULL(settled, 0) = 0 AND IFNULL(out_amount, 0) > 0")
   } catch(e) {}
 
   // Seed categories if empty
@@ -206,12 +213,18 @@ export function createDb(userDataPath) {
     getAllDownstreams() {
       return db.prepare('SELECT * FROM downstreams ORDER BY created_at ASC').all()
     },
-    addDownstream(name) {
-      const result = db.prepare('INSERT INTO downstreams (name) VALUES (?)').run(name)
+    addDownstream(name, ledgerTypesJson) {
+      const lt = ledgerTypesJson && String(ledgerTypesJson).trim() ? ledgerTypesJson : '["funds"]'
+      const result = db.prepare('INSERT INTO downstreams (name, ledger_types) VALUES (?, ?)').run(name, lt)
       return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(result.lastInsertRowid)
     },
-    updateDownstream(id, name) {
-      db.prepare('UPDATE downstreams SET name = ? WHERE id = ?').run(name, id)
+    updateDownstream(id, name, ledgerTypesJson) {
+      const lt = ledgerTypesJson && String(ledgerTypesJson).trim() ? ledgerTypesJson : '["funds"]'
+      db.prepare('UPDATE downstreams SET name = ?, ledger_types = ? WHERE id = ?').run(name, lt, id)
+      return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
+    },
+    setDownstreamEnabled(id, enabled) {
+      db.prepare('UPDATE downstreams SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id)
       return db.prepare('SELECT * FROM downstreams WHERE id = ?').get(id)
     },
     deleteDownstream(id) {

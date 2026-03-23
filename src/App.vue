@@ -22,14 +22,47 @@
         <div class="sidebar-section">
           <div class="sidebar-label">概览</div>
           <div
-            v-for="item in navItems"
-            :key="item.id"
             class="sidebar-item"
-            :class="{ active: currentView === item.id }"
-            @click="currentView = item.id"
+            :class="{ active: currentView === 'dashboard' }"
+            @click="currentView = 'dashboard'"
           >
-            <i :class="'pi ' + item.icon"></i>
-            <span>{{ item.label }}</span>
+            <i class="pi pi-home"></i>
+            <span>仪表板</span>
+          </div>
+        </div>
+
+        <div class="sidebar-section sidebar-accounting">
+          <button
+            type="button"
+            class="sidebar-group-head"
+            :aria-expanded="accountingExpanded"
+            @click="accountingExpanded = !accountingExpanded"
+          >
+            <i :class="accountingExpanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+            <span>记账类型</span>
+          </button>
+          <div v-show="accountingExpanded" class="sidebar-sublist">
+            <div
+              v-for="sub in accountingSubItems"
+              :key="sub.id"
+              class="sidebar-item sidebar-sub"
+              :class="{ active: currentView === sub.id }"
+              @click="currentView = sub.id"
+            >
+              <i :class="'pi ' + sub.icon"></i>
+              <span>{{ sub.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div
+            class="sidebar-item"
+            :class="{ active: currentView === 'downstream' }"
+            @click="currentView = 'downstream'"
+          >
+            <i class="pi pi-users"></i>
+            <span>出货商</span>
           </div>
         </div>
 
@@ -56,10 +89,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from './store.js'
+import { ACCOUNTING_SUB_NAV } from './config/accountingNav.js'
 import DashboardView from './views/DashboardView.vue'
 import FundsView from './views/FundsView.vue'
+import WireTransferView from './views/WireTransferView.vue'
+import One4AllView from './views/One4AllView.vue'
 import DownstreamView from './views/DownstreamView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
@@ -82,16 +118,23 @@ function checkUpdate() {
 
 const currentView = ref('dashboard')
 const showAddDialog = ref(false)
+const accountingExpanded = ref(true)
 
-const navItems = [
-  { id: 'dashboard', label: '仪表板', icon: 'pi-home' },
-  { id: 'funds', label: '资金', icon: 'pi-credit-card' },
-  { id: 'downstream', label: '出货商', icon: 'pi-users' },
-]
+const accountingSubItems = ACCOUNTING_SUB_NAV
 
 const currentComponent = computed(() => {
-  const map = { dashboard: DashboardView, funds: FundsView, downstream: DownstreamView }
+  const map = {
+    dashboard: DashboardView,
+    funds: FundsView,
+    wire: WireTransferView,
+    one4all: One4AllView,
+    downstream: DownstreamView,
+  }
   return map[currentView.value]
+})
+
+watch(currentView, (v) => {
+  if (accountingSubItems.some(s => s.id === v)) accountingExpanded.value = true
 })
 
 function winClose() { window.api?.close() }
@@ -230,6 +273,42 @@ function winMaximize() { window.api?.maximize() }
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.sidebar-accounting { margin-top: 4px; }
+.sidebar-section + .sidebar-section:not(.sidebar-accounting) { margin-top: 6px; }
+
+.sidebar-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mac-text-secondary);
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.sidebar-group-head:hover {
+  background: var(--mac-hover);
+  color: var(--mac-text);
+}
+.sidebar-group-head i { font-size: 10px; opacity: 0.85; }
+
+.sidebar-sublist {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 4px;
+}
+.sidebar-item.sidebar-sub {
+  padding-left: 14px;
+  font-size: 12px;
 }
 
 .sidebar-item {

@@ -45,9 +45,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // Downstreams
   getAllDownstreams: () => ipcRenderer.invoke('downstreams:getAll'),
-  addDownstream: (name) => ipcRenderer.invoke('downstreams:add', name),
-  updateDownstream: (id, name) => ipcRenderer.invoke('downstreams:update', id, name),
+  addDownstream: (name, ledgerTypes) => ipcRenderer.invoke('downstreams:add', name, ledgerTypes),
+  updateDownstream: (id, name, ledgerTypes) => ipcRenderer.invoke('downstreams:update', id, name, ledgerTypes),
   deleteDownstream: (id) => ipcRenderer.invoke('downstreams:delete', id),
   addDownstreamPrepaid: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaid', id, amount),
   addDownstreamPrepaidUsed: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaidUsed', id, amount),
+  setDownstreamEnabled: (id, enabled) => ipcRenderer.invoke('downstreams:setEnabled', id, enabled),
 })

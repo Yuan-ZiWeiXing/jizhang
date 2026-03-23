@@ -8,6 +8,10 @@ import { autoUpdater } from 'electron-updater'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const isDev = process.env.NODE_ENV === 'development'
 
+if (isDev) {
+  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+}
+
 let db
 let win
 
@@ -154,9 +158,16 @@ function setupIpc() {
 
   // Downstreams
   ipcMain.handle('downstreams:getAll', () => db.getAllDownstreams())
-  ipcMain.handle('downstreams:add', (_, name) => db.addDownstream(name))
-  ipcMain.handle('downstreams:update', (_, id, name) => db.updateDownstream(id, name))
+  ipcMain.handle('downstreams:add', (_, name, ledgerTypes) => {
+    const ids = Array.isArray(ledgerTypes) && ledgerTypes.length ? ledgerTypes : ['funds']
+    return db.addDownstream(name, JSON.stringify(ids))
+  })
+  ipcMain.handle('downstreams:update', (_, id, name, ledgerTypes) => {
+    const ids = Array.isArray(ledgerTypes) && ledgerTypes.length ? ledgerTypes : ['funds']
+    return db.updateDownstream(id, name, JSON.stringify(ids))
+  })
   ipcMain.handle('downstreams:delete', (_, id) => db.deleteDownstream(id))
+  ipcMain.handle('downstreams:setEnabled', (_, id, enabled) => db.setDownstreamEnabled(id, enabled))
   ipcMain.handle('downstreams:addPrepaid', (_, id, amount) => db.addDownstreamPrepaid(id, amount))
   ipcMain.handle('downstreams:addPrepaidUsed', (_, id, amount) => db.addDownstreamPrepaidUsed(id, amount))
 }

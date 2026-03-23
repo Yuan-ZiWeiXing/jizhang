@@ -41,7 +41,7 @@
           </DatePicker>
         </div>
         <div class="filter-item">
-          <label>分组</label>
+          <label>供应商</label>
           <Select v-model="statsGroup" :options="statsGroupOptions" optionLabel="name" optionValue="id" placeholder="全部" showClear class="filter-select" />
         </div>
         <div class="filter-item">
@@ -253,7 +253,7 @@
     <div class="table-wrap">
       <div v-if="activeGroup === null && !funds.length" class="group-hint">
         <i class="pi pi-folder-open"></i>
-        <p>请先选择或新建一个分组，再添加记录</p>
+        <p>请先选择或新建一个供应商，再添加记录</p>
       </div>
       <DataTable
         :value="filteredFunds"
@@ -291,7 +291,7 @@
             <span class="card-inline">{{ data.card_no }} {{ data.card_date }} {{ data.cvv }}</span>
           </template>
         </Column>
-        <Column v-if="activeGroup === null" header="分组" style="min-width:70px">
+        <Column v-if="activeGroup === null" header="供应商" style="min-width:70px">
           <template #body="{data}">
             <Tag v-if="groupName(data.group_id)" :value="groupName(data.group_id)" severity="secondary" />
             <span v-else class="no-data">-</span>
@@ -339,11 +339,14 @@
             <span v-else class="no-data">-</span>
           </template>
         </Column>
-        <Column field="settled" header="结算" style="min-width:60px">
+        <Column field="settled" header="结算" style="min-width:72px">
           <template #body="{data}">
-            <div class="settle-switch" :class="{ on: data.settled, disabled: !data.out_amount }" @click="data.out_amount && toggleSettled(data)">
+            <div v-if="!data.out_amount" class="settle-switch disabled">
+              <span class="settle-inline">—</span>
+            </div>
+            <div v-else class="settle-switch" :class="{ on: data.settled }" @click="toggleSettled(data)">
               <div class="settle-track"><div class="settle-thumb"></div></div>
-              <span>{{ data.settled ? '已结' : '未结' }}</span>
+              <span>{{ data.settled ? '已完成' : '待结算' }}</span>
             </div>
           </template>
         </Column>
@@ -483,6 +486,7 @@
         <div class="form-field">
           <label>出货商</label>
           <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加、勾选「资金」并保持启用。</p>
           <div v-if="selectedDownstream" class="ds-hint">
             预付剩余：¥{{ fmtNum((selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0)) }}
             <template v-if="(selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0) > 0">
@@ -529,6 +533,7 @@
         <div class="form-field">
           <label>出货商</label>
           <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加并保持启用。</p>
         </div>
         <div class="form-field">
           <label>出账汇率</label>
@@ -611,9 +616,9 @@
       </template>
     </Dialog>
     <!-- Add Group Dialog -->
-    <Dialog v-model:visible="showAddGroup" modal header="新建分组" :style="{width:'300px'}" :draggable="false">
+    <Dialog v-model:visible="showAddGroup" modal header="新建供应商" :style="{width:'300px'}" :draggable="false">
       <div style="padding-top:8px">
-        <InputText v-model="newGroupName" class="w-full" placeholder="分组名称" @keyup.enter="submitAddGroup" autofocus />
+        <InputText v-model="newGroupName" class="w-full" placeholder="供应商名称" @keyup.enter="submitAddGroup" autofocus />
       </div>
       <template #footer>
         <Button label="取消" text @click="showAddGroup = false" />
@@ -624,7 +629,7 @@
     <!-- Prepaid Dialog -->
     <Dialog v-model:visible="showPrepaidDialog" modal header="添加预付金额" :style="{width:'350px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:8px;">
-        <label style="font-size:13px; color:var(--mac-text-secondary)">当前分组：{{ activeGroupData?.name }}</label>
+        <label style="font-size:13px; color:var(--mac-text-secondary)">当前供应商：{{ activeGroupData?.name }}</label>
         <div v-if="activeGroupData?.prepaid" style="font-size:12px; color:var(--mac-text-secondary)">
           当前预付：¥{{ fmtNum(activeGroupData.prepaid) }}　剩余：¥{{ fmtNum(prepaidRemaining) }}
         </div>
@@ -637,7 +642,7 @@
     </Dialog>
 
     <!-- Rename Group Dialog -->
-    <Dialog v-model:visible="showRenameGroup" modal header="重命名分组" :style="{width:'300px'}" :draggable="false">
+    <Dialog v-model:visible="showRenameGroup" modal header="重命名供应商" :style="{width:'300px'}" :draggable="false">
       <div style="padding-top:8px">
         <InputText v-model="renameGroupName" class="w-full" @keyup.enter="submitRenameGroup" autofocus />
       </div>
@@ -671,6 +676,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { FilterMatchMode } from '@primevue/core/api'
 import * as XLSX from 'xlsx'
+import { parseDownstreamLedgerTypes } from '../utils/downstreamLedger.js'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -1023,8 +1029,14 @@ const quickInput = ref('')
 const editForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '', downstream_id: null })
 const editId = ref(null)
 
+function isDownstreamEnabled(d) {
+  return d == null || d.enabled == null || Number(d.enabled) === 1
+}
+
 const downstreamOptions = computed(() =>
-  downstreams.value.map(d => ({ label: d.name, value: d.id }))
+  downstreams.value
+    .filter(d => isDownstreamEnabled(d) && parseDownstreamLedgerTypes(d).includes('funds'))
+    .map(d => ({ label: d.name, value: d.id })),
 )
 const selectedDownstream = computed(() =>
   editForm.value.downstream_id ? downstreams.value.find(d => d.id === editForm.value.downstream_id) : null
@@ -1047,7 +1059,7 @@ watch(() => batchEditForm.value.downstream_id, (dsId) => {
 const exportFields = ref([
   { key: 'record_date', label: '记录日期', checked: true },
   { key: 'currency', label: '货币', checked: true },
-  { key: 'group', label: '分组', checked: true },
+  { key: 'group', label: '供应商', checked: true },
   { key: 'card_no', label: '卡号', checked: true },
   { key: 'card_date', label: '卡片日期', checked: true },
   { key: 'cvv', label: 'CVV', checked: true },
@@ -1073,7 +1085,7 @@ const ctxItems = [
 const groupCtxItems = [
   { label: '重命名', icon: 'pi pi-pencil', command: () => ctxGroup.value && startRename(ctxGroup.value) },
   { separator: true },
-  { label: '删除分组', icon: 'pi pi-trash', command: () => ctxGroup.value && deleteGroup(ctxGroup.value.id) },
+  { label: '删除供应商', icon: 'pi pi-trash', command: () => ctxGroup.value && deleteGroup(ctxGroup.value.id) },
 ]
 
 function onGroupCtx(event, group) {
@@ -1406,7 +1418,7 @@ function batchDelete() {
 }
 
 async function toggleSettled(fund) {
-  if (!window.api) return
+  if (!window.api || !fund.out_amount) return
   const newVal = fund.settled ? 0 : 1
   const updated = await window.api.updateFundSettled(fund.id, newVal)
   fund.settled = updated.settled
@@ -1450,7 +1462,7 @@ function doExport() {
       else if (f.key === 'card_no') val = String(row.card_no ?? '')
       else if (f.key === 'card_date') val = String(row.card_date ?? '')
       else if (f.key === 'cvv') val = String(row.cvv ?? '')
-      else if (f.key === 'settled') val = row.status || '待出账'
+      else if (f.key === 'settled') val = !row.out_amount ? '—' : (row.settled ? '已完成' : '待结算')
       else val = row[f.key] ?? ''
       obj[f.label] = val
     }
@@ -1670,6 +1682,7 @@ function fmtDate(d) {
 .batch-info { font-size: 13px; font-weight: 600; color: var(--mac-accent, #007aff); }
 .batch-edit-hint { font-size: 13px; color: var(--mac-text-secondary); padding: 4px 0 8px; }
 .batch-edit-note { font-size: 12px; color: var(--mac-text-secondary); font-style: italic; margin-top: 4px; }
+.form-hint-mini { font-size: 12px; color: #e67e22; margin: 4px 0 0; }
 .table-wrap { flex: 1; overflow: hidden; padding: 8px 12px; position: relative; display: flex; flex-direction: column; min-height: 0; }
 :deep(.funds-table) { display: flex; flex-direction: column; height: 100%; }
 :deep(.funds-table .p-datatable-wrapper) { flex: 1; min-height: 0; overflow: auto; }
@@ -1731,7 +1744,8 @@ function fmtDate(d) {
   font-size: 11px; font-weight: 600; color: var(--mac-text-secondary);
   user-select: none;
 }
-.settle-switch.disabled { opacity: 0.35; cursor: not-allowed; }
+.settle-switch.disabled { opacity: 0.35; cursor: default; }
+.settle-inline { font-size: 12px; color: var(--mac-text-secondary); }
 .settle-switch.on { color: #34c759; }
 .settle-track {
   width: 32px; height: 18px; border-radius: 9px;
