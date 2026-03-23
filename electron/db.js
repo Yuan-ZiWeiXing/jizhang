@@ -22,12 +22,6 @@ export function createDb(userDataPath) {
 
   db.pragma('journal_mode = WAL')
 
-  // Migrations
-  try { db.exec('ALTER TABLE funds ADD COLUMN group_id INTEGER DEFAULT NULL') } catch(e) {}
-  try { db.exec("ALTER TABLE funds ADD COLUMN date TEXT DEFAULT ''") } catch(e) {}
-  try { db.exec("ALTER TABLE funds ADD COLUMN record_date TEXT DEFAULT ''") } catch(e) {}
-  try { db.exec("ALTER TABLE funds ADD COLUMN out_date TEXT DEFAULT ''") } catch(e) {}
-  try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
   // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -65,9 +59,21 @@ export function createDb(userDataPath) {
       in_rate REAL DEFAULT 1,
       out_amount REAL DEFAULT 0,
       out_rate REAL DEFAULT 1,
+      date TEXT DEFAULT '',
+      record_date TEXT DEFAULT '',
+      out_date TEXT DEFAULT '',
+      out_to TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
   `)
+
+  // Migrations for existing databases missing newer columns
+  try { db.exec('ALTER TABLE funds ADD COLUMN group_id INTEGER DEFAULT NULL') } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN record_date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN out_date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
+
 
   // Seed categories if empty
   const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get()
