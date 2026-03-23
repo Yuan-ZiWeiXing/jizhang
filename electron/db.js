@@ -22,6 +22,12 @@ export function createDb(userDataPath) {
 
   db.pragma('journal_mode = WAL')
 
+  // Migrations
+  try { db.exec('ALTER TABLE funds ADD COLUMN group_id INTEGER DEFAULT NULL') } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN record_date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN out_date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
   // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -42,8 +48,15 @@ export function createDb(userDataPath) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS fund_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS funds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER DEFAULT NULL,
       card_no TEXT NOT NULL,
       card_date TEXT NOT NULL,
       cvv TEXT NOT NULL,
@@ -94,20 +107,51 @@ export function createDb(userDataPath) {
     getAllFunds() {
       return db.prepare('SELECT * FROM funds ORDER BY created_at DESC').all()
     },
+    getFundsByGroup(groupId) {
+      if (groupId === null) return db.prepare('SELECT * FROM funds WHERE group_id IS NULL ORDER BY created_at DESC').all()
+      return db.prepare('SELECT * FROM funds WHERE group_id = ? ORDER BY created_at DESC').all(groupId)
+    },
     getFundsByDateRange(startDate, endDate) {
       return db.prepare('SELECT * FROM funds WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC').all(startDate, endDate + ' 23:59:59')
     },
-    addFund({ card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate }) {
-      const stmt = db.prepare('INSERT INTO funds (card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      const result = stmt.run(card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1)
+    addFund({ group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date }) {
+      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      const result = stmt.run(group_id || null, card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1, record_date || '')
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(result.lastInsertRowid)
     },
-    updateFundOut(id, { out_amount, out_rate }) {
-      db.prepare('UPDATE funds SET out_amount=?, out_rate=? WHERE id=?').run(out_amount, out_rate, id)
+    updateFundOut(id, { out_amount, out_rate, out_date, out_to, status }) {
+      db.prepare('UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=? WHERE id=?').run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
     deleteFund(id) {
       db.prepare('DELETE FROM funds WHERE id = ?').run(id)
+      return { ok: true }
+    },
+    addFundsBatch(rows) {
+      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      const insertMany = db.transaction((items) => {
+        for (const r of items) {
+          stmt.run(r.group_id || null, r.card_no, r.card_date, r.cvv, r.status, r.in_amount || 0, r.in_rate || 1, r.out_amount || 0, r.out_rate || 1, r.record_date || '')
+        }
+      })
+      insertMany(rows)
+      return { count: rows.length }
+    },
+    // Fund groups
+    getAllFundGroups() {
+      return db.prepare('SELECT * FROM fund_groups ORDER BY created_at ASC').all()
+    },
+    addFundGroup(name) {
+      const result = db.prepare('INSERT INTO fund_groups (name) VALUES (?)').run(name)
+      return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(result.lastInsertRowid)
+    },
+    renameFundGroup(id, name) {
+      db.prepare('UPDATE fund_groups SET name = ? WHERE id = ?').run(name, id)
+      return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(id)
+    },
+    deleteFundGroup(id) {
+      db.prepare('UPDATE funds SET group_id = NULL WHERE group_id = ?').run(id)
+      db.prepare('DELETE FROM fund_groups WHERE id = ?').run(id)
       return { ok: true }
     },
   }

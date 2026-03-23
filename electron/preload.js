@@ -32,4 +32,10 @@ contextBridge.exposeInMainWorld('api', {
   addFund: (data) => ipcRenderer.invoke('funds:add', data),
   updateFundOut: (id, data) => ipcRenderer.invoke('funds:updateOut', id, data),
   deleteFund: (id) => ipcRenderer.invoke('funds:delete', id),
+  addFundsBatch: (rows) => ipcRenderer.invoke('funds:addBatch', rows),
+  getFundsByGroup: (groupId) => ipcRenderer.invoke('funds:getByGroup', groupId),
+  getAllFundGroups: () => ipcRenderer.invoke('fundGroups:getAll'),
+  addFundGroup: (name) => ipcRenderer.invoke('fundGroups:add', name),
+  renameFundGroup: (id, name) => ipcRenderer.invoke('fundGroups:rename', id, name),
+  deleteFundGroup: (id) => ipcRenderer.invoke('fundGroups:delete', id),
 })

@@ -46,6 +46,10 @@
             <span style="color: var(--mac-red)">-¥{{ formatAmount(totalExpense) }}</span>
           </div>
         </div>
+        <div class="sidebar-version" @click="checkUpdate">
+          <span>v{{ appVersion }}</span>
+          <i class="pi pi-sync" style="font-size:10px" title="检查更新"></i>
+        </div>
       </div>
 
       <!-- Main Content -->
@@ -74,7 +78,18 @@ import UpdaterDialog from './components/UpdaterDialog.vue'
 
 const { totalIncome, totalExpense, balance, initStore } = useStore()
 
-onMounted(() => initStore())
+const appVersion = ref('')
+
+onMounted(async () => {
+  initStore()
+  if (window.api) {
+    appVersion.value = await window.api.getVersion()
+  }
+})
+
+function checkUpdate() {
+  if (window.api) window.api.checkForUpdate()
+}
 
 const currentView = ref('dashboard')
 const showAddDialog = ref(false)
@@ -273,6 +288,13 @@ function winMaximize() { window.api?.maximize() }
 .summary-balance.positive { color: var(--mac-green); }
 .summary-balance.negative { color: var(--mac-red); }
 .summary-row.small { font-size: 11px; }
+
+.sidebar-version {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px; font-size: 11px; color: var(--mac-text-secondary);
+  cursor: pointer; border-radius: 6px; transition: background 0.15s;
+}
+.sidebar-version:hover { background: var(--mac-hover); color: var(--mac-text); }
 
 .mac-main {
   flex: 1;

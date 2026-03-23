@@ -12,10 +12,10 @@ let win
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1100,
-    height: 700,
-    minWidth: 800,
-    minHeight: 560,
+    width: 1400,
+    height: 800,
+    minWidth: 1000,
+    minHeight: 600,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -23,6 +23,7 @@ function createWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
   })
 
@@ -52,7 +53,7 @@ app.on('window-all-closed', () => {
 
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('checking-for-update', () => {
     win.webContents.send('updater:checking')
@@ -101,7 +102,9 @@ function setupIpc() {
   // Updater controls
   ipcMain.handle('updater:check', () => autoUpdater.checkForUpdates())
   ipcMain.handle('updater:download', () => autoUpdater.downloadUpdate())
-  ipcMain.on('updater:install', () => autoUpdater.quitAndInstall())
+  ipcMain.on('updater:install', () => {
+    autoUpdater.quitAndInstall(false, true)
+  })
   ipcMain.handle('updater:getVersion', () => app.getVersion())
 
   // Funds
@@ -110,4 +113,10 @@ function setupIpc() {
   ipcMain.handle('funds:add', (_, data) => db.addFund(data))
   ipcMain.handle('funds:updateOut', (_, id, data) => db.updateFundOut(id, data))
   ipcMain.handle('funds:delete', (_, id) => db.deleteFund(id))
+  ipcMain.handle('funds:addBatch', (_, rows) => db.addFundsBatch(rows))
+  ipcMain.handle('funds:getByGroup', (_, groupId) => db.getFundsByGroup(groupId))
+  ipcMain.handle('fundGroups:getAll', () => db.getAllFundGroups())
+  ipcMain.handle('fundGroups:add', (_, name) => db.addFundGroup(name))
+  ipcMain.handle('fundGroups:rename', (_, id, name) => db.renameFundGroup(id, name))
+  ipcMain.handle('fundGroups:delete', (_, id) => db.deleteFundGroup(id))
 }

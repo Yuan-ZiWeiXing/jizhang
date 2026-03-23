@@ -122,6 +122,9 @@ onMounted(async () => {
       availableInfo.value = info
       showAvailable.value = true
     }),
+    window.api.onUpdaterEvent('updater:not-available', () => {
+      toast.add({ severity: 'info', summary: '已是最新版本', detail: `当前版本 v${currentVersion.value} 已是最新`, life: 3000 })
+    }),
     window.api.onUpdaterEvent('updater:progress', (progress) => {
       progressData.value = progress
     }),
