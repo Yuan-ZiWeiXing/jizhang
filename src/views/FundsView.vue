@@ -1,5 +1,121 @@
 <template>
   <div class="funds-view">
+    <!-- Top Tabs -->
+    <div class="top-tabs">
+      <button :class="['top-tab', { active: topTab === 'manage' }]" @click="topTab = 'manage'">
+        <i class="pi pi-credit-card"></i> 资金管理
+      </button>
+      <button :class="['top-tab', { active: topTab === 'stats' }]" @click="topTab = 'stats'">
+        <i class="pi pi-chart-bar"></i> 收支统计
+      </button>
+    </div>
+
+    <!-- Stats View -->
+    <div v-if="topTab === 'stats'" class="funds-stats">
+      <!-- Stats Filter Bar -->
+      <div class="fs-filter-bar">
+        <div class="filter-item">
+          <label>入账日期</label>
+          <DatePicker v-model="statsRecordRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
+            <template #buttonbar="{ clearCallback }">
+              <div class="dp-btnbar">
+                <Button size="small" label="今天" severity="secondary" @click="statsRecordRange = daysRange(0)" />
+                <Button size="small" label="近7天" severity="secondary" @click="statsRecordRange = daysRange(7)" />
+                <Button size="small" label="近30天" severity="secondary" @click="statsRecordRange = daysRange(30)" />
+                <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback" />
+              </div>
+            </template>
+          </DatePicker>
+        </div>
+        <div class="filter-item">
+          <label>出账日期</label>
+          <DatePicker v-model="statsOutRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
+            <template #buttonbar="{ clearCallback }">
+              <div class="dp-btnbar">
+                <Button size="small" label="今天" severity="secondary" @click="statsOutRange = daysRange(0)" />
+                <Button size="small" label="近7天" severity="secondary" @click="statsOutRange = daysRange(7)" />
+                <Button size="small" label="近30天" severity="secondary" @click="statsOutRange = daysRange(30)" />
+                <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback" />
+              </div>
+            </template>
+          </DatePicker>
+        </div>
+        <div class="filter-item">
+          <label>分组</label>
+          <Select v-model="statsGroup" :options="statsGroupOptions" optionLabel="name" optionValue="id" placeholder="全部" showClear class="filter-select" />
+        </div>
+        <div class="filter-item">
+          <label>状态</label>
+          <Select v-model="statsStatus" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
+        </div>
+        <div class="filter-item">
+          <label>出给谁</label>
+          <InputText v-model="statsOutTo" placeholder="搜索..." class="filter-text" />
+        </div>
+        <Button v-if="hasStatsFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearStatsFilters" />
+      </div>
+
+      <div class="fs-summary-cards">
+        <div class="fs-card">
+          <div class="fs-card-label">总进账</div>
+          <div class="fs-card-val income">¥{{ fmtNum(statsData.totalIn) }}</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">总出账</div>
+          <div class="fs-card-val expense">¥{{ fmtNum(statsData.totalOut) }}</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">总盈利</div>
+          <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(statsData.totalProfit) }}</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">总记录数</div>
+          <div class="fs-card-val neutral">{{ statsData.totalCount }}</div>
+        </div>
+      </div>
+
+      <div class="fs-section">
+        <div class="fs-section-title">按状态统计</div>
+        <div class="fs-status-list">
+          <div v-for="s in statsData.byStatus" :key="s.status" class="fs-status-row">
+            <Tag :severity="s.status === '盈利' ? 'success' : s.status === '亏损' ? 'danger' : 'warning'" :value="s.status" />
+            <span class="fs-status-count">{{ s.count }} 条</span>
+            <div class="fs-status-bar-bg">
+              <div class="fs-status-bar-fill" :style="{ width: s.pct + '%', background: s.status === '盈利' ? '#34c759' : s.status === '亏损' ? '#ff3b30' : '#ff9500' }"></div>
+            </div>
+            <span class="fs-status-amt">进 ¥{{ fmtNum(s.inTotal) }}</span>
+            <span class="fs-status-amt">出 ¥{{ fmtNum(s.outTotal) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fs-section" v-if="statsData.byGroup.length">
+        <div class="fs-section-title">按分组统计</div>
+        <div class="fs-group-list">
+          <div v-for="g in statsData.byGroup" :key="g.name" class="fs-group-row">
+            <span class="fs-group-name">{{ g.name }}</span>
+            <span class="fs-group-count">{{ g.count }} 条</span>
+            <span class="fs-group-amt income">进 ¥{{ fmtNum(g.inTotal) }}</span>
+            <span class="fs-group-amt expense">出 ¥{{ fmtNum(g.outTotal) }}</span>
+            <span class="fs-group-amt" :class="g.profit >= 0 ? 'income' : 'expense'">利 ¥{{ fmtNum(g.profit) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fs-section" v-if="statsData.byOutTo.length">
+        <div class="fs-section-title">按出账对象统计</div>
+        <div class="fs-group-list">
+          <div v-for="o in statsData.byOutTo" :key="o.name" class="fs-group-row">
+            <span class="fs-group-name">{{ o.name }}</span>
+            <span class="fs-group-count">{{ o.count }} 条</span>
+            <span class="fs-group-amt expense">出 ¥{{ fmtNum(o.outTotal) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manage View -->
+    <template v-if="topTab === 'manage'">
     <!-- Toolbar -->
     <div class="toolbar">
       <span class="view-title">资金管理</span>
@@ -185,6 +301,8 @@
         </div>
       </div>
     </div>
+
+    </template>
 
     <!-- Right-click menu -->
     <ContextMenu ref="ctxMenu" :model="ctxItems" />
@@ -403,7 +521,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -421,11 +539,14 @@ import { useToast } from 'primevue/usetoast'
 
 const toast = useToast()
 
+const topTab = ref('manage')
+
 function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d }
 function daysRange(n) { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - n); return [start, end] }
 function emptyForm() { return { group_id: null, card_no: '', card_date: '', cvv: '', status: '待出账', in_amount: 0, in_rate: 1, out_amount: 0, out_rate: 1, record_date: new Date() } }
 
 const funds = ref([])
+const allFunds = ref([])
 const groups = ref([])
 const activeGroup = ref(null)
 const loading = ref(false)
@@ -504,6 +625,92 @@ const totalIn = computed(() => filteredFunds.value.reduce((s, f) => s + f.in_amo
 const totalOut = computed(() => filteredFunds.value.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0))
 const totalProfit = computed(() => totalOut.value - totalIn.value)
 const pendingCount = computed(() => filteredFunds.value.filter(f => f.status === '待出账').length)
+
+// Stats filters
+const statsRecordRange = ref(null)
+const statsOutRange = ref(null)
+const statsGroup = ref(null)
+const statsStatus = ref(null)
+const statsOutTo = ref('')
+const statsGroupOptions = computed(() => groups.value)
+
+const hasStatsFilter = computed(() =>
+  statsRecordRange.value || statsOutRange.value || statsGroup.value !== null || statsStatus.value || statsOutTo.value
+)
+
+function clearStatsFilters() {
+  statsRecordRange.value = null
+  statsOutRange.value = null
+  statsGroup.value = null
+  statsStatus.value = null
+  statsOutTo.value = ''
+}
+
+const statsFilteredFunds = computed(() => {
+  let list = allFunds.value
+  if (statsGroup.value !== null && statsGroup.value !== undefined) {
+    list = list.filter(f => f.group_id === statsGroup.value)
+  }
+  if (statsStatus.value) {
+    list = list.filter(f => f.status === statsStatus.value)
+  }
+  if (statsRecordRange.value) {
+    const [start, end] = statsRecordRange.value
+    if (start) { const s = fmtDate(start); list = list.filter(f => (f.record_date || '') >= s) }
+    if (end) { const e = fmtDate(end); list = list.filter(f => (f.record_date || '') <= e) }
+  }
+  if (statsOutRange.value) {
+    const [start, end] = statsOutRange.value
+    if (start) { const s = fmtDate(start); list = list.filter(f => (f.out_date || '') >= s) }
+    if (end) { const e = fmtDate(end); list = list.filter(f => (f.out_date || '') <= e) }
+  }
+  if (statsOutTo.value) {
+    const kw = statsOutTo.value.toLowerCase()
+    list = list.filter(f => (f.out_to || '').toLowerCase().includes(kw))
+  }
+  return list
+})
+
+const statsData = computed(() => {
+  const all = statsFilteredFunds.value
+  const tIn = all.reduce((s, f) => s + f.in_amount * f.in_rate, 0)
+  const tOut = all.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0)
+
+  const statusMap = {}
+  for (const f of all) {
+    const st = f.status || '待出账'
+    if (!statusMap[st]) statusMap[st] = { status: st, count: 0, inTotal: 0, outTotal: 0 }
+    statusMap[st].count++
+    statusMap[st].inTotal += f.in_amount * f.in_rate
+    statusMap[st].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
+  }
+  const byStatus = Object.values(statusMap).sort((a, b) => b.count - a.count)
+  const maxCount = Math.max(...byStatus.map(s => s.count), 1)
+  byStatus.forEach(s => { s.pct = (s.count / maxCount) * 100 })
+
+  const groupMap = {}
+  for (const f of all) {
+    const gn = groupName(f.group_id) || '未分组'
+    if (!groupMap[gn]) groupMap[gn] = { name: gn, count: 0, inTotal: 0, outTotal: 0, profit: 0 }
+    groupMap[gn].count++
+    groupMap[gn].inTotal += f.in_amount * f.in_rate
+    groupMap[gn].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
+    groupMap[gn].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+  }
+  const byGroup = Object.values(groupMap).sort((a, b) => b.count - a.count)
+
+  const outToMap = {}
+  for (const f of all) {
+    if (!f.out_to) continue
+    if (!outToMap[f.out_to]) outToMap[f.out_to] = { name: f.out_to, count: 0, outTotal: 0 }
+    outToMap[f.out_to].count++
+    outToMap[f.out_to].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
+  }
+  const byOutTo = Object.values(outToMap).sort((a, b) => b.outTotal - a.outTotal)
+
+  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byStatus, byGroup, byOutTo }
+})
+
 const form = ref(emptyForm())
 const quickInput = ref('')
 const editForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' })
@@ -550,7 +757,17 @@ function onGroupCtx(event, group) {
 
 onMounted(async () => {
   await loadGroups()
+  await loadAllFunds()
   await load()
+})
+
+async function loadAllFunds() {
+  if (!window.api) { allFunds.value = []; return }
+  allFunds.value = await window.api.getAllFunds()
+}
+
+watch(topTab, (val) => {
+  if (val === 'stats') loadAllFunds()
 })
 
 async function loadGroups() {
@@ -820,6 +1037,72 @@ function fmtDate(d) {
 
 <style scoped>
 .funds-view { display: flex; flex-direction: column; height: 100%; background: var(--mac-bg); }
+
+.top-tabs {
+  display: flex; gap: 2px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--mac-border);
+  background: rgba(255,255,255,0.5);
+  backdrop-filter: blur(10px);
+}
+.top-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border: none; background: transparent;
+  border-radius: 8px; font-size: 13px; cursor: pointer;
+  color: var(--mac-text-secondary); transition: all 0.15s; font-weight: 500;
+}
+.top-tab i { font-size: 13px; }
+.top-tab:hover { background: rgba(0,0,0,0.05); color: var(--mac-text); }
+.top-tab.active { background: var(--mac-accent, #007aff); color: #fff; }
+
+.funds-stats {
+  flex: 1; overflow-y: auto;
+  padding: 20px; display: flex; flex-direction: column; gap: 20px;
+}
+.fs-filter-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--mac-surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.fs-summary-cards {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+.fs-card {
+  background: var(--mac-surface); border-radius: 12px; padding: 16px;
+  text-align: center; box-shadow: var(--shadow-sm);
+}
+.fs-card-label { font-size: 11px; color: var(--mac-text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; }
+.fs-card-val { font-size: 20px; font-weight: 700; }
+.fs-card-val.income { color: #34c759; }
+.fs-card-val.expense { color: #ff9500; }
+.fs-card-val.neutral { color: var(--mac-text); }
+
+.fs-section { display: flex; flex-direction: column; gap: 10px; }
+.fs-section-title { font-size: 14px; font-weight: 600; color: var(--mac-text); }
+
+.fs-status-list { display: flex; flex-direction: column; gap: 8px; }
+.fs-status-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--mac-surface); border-radius: 10px; padding: 10px 14px;
+}
+.fs-status-count { font-size: 13px; color: var(--mac-text); font-weight: 500; min-width: 50px; }
+.fs-status-bar-bg { flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; }
+.fs-status-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.fs-status-amt { font-size: 12px; color: var(--mac-text-secondary); min-width: 90px; text-align: right; }
+
+.fs-group-list { display: flex; flex-direction: column; gap: 6px; }
+.fs-group-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--mac-surface); border-radius: 10px; padding: 10px 14px;
+}
+.fs-group-name { font-size: 13px; font-weight: 600; color: var(--mac-text); min-width: 80px; }
+.fs-group-count { font-size: 12px; color: var(--mac-text-secondary); min-width: 50px; }
+.fs-group-amt { font-size: 12px; font-weight: 600; min-width: 100px; text-align: right; }
+.fs-group-amt.income { color: #34c759; }
+.fs-group-amt.expense { color: #ff9500; }
+
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px;

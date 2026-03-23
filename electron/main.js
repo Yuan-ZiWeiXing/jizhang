@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync, copyFileSync } from 'fs'
 import { createDb } from './db.js'
 import { autoUpdater } from 'electron-updater'
 
@@ -32,12 +33,39 @@ function createWindow() {
   } else {
     win.loadFile(join(__dirname, '../dist/index.html'))
   }
+
+  if (!isDev) {
+    win.webContents.on('before-input-event', (event, input) => {
+      const isDevToolsShortcut =
+        (input.key === 'F12') ||
+        (input.control && input.shift && input.key === 'I') ||
+        (input.control && input.shift && input.key === 'i') ||
+        (input.control && input.shift && input.key === 'J') ||
+        (input.control && input.shift && input.key === 'j')
+      if (isDevToolsShortcut) event.preventDefault()
+    })
+  }
+}
+
+function migrateOldDb(targetDir) {
+  const targetDb = join(targetDir, 'jizhang.db')
+  if (existsSync(targetDb)) return
+  const exeDir = dirname(app.getPath('exe'))
+  const oldDb = join(exeDir, 'jizhang.db')
+  if (existsSync(oldDb)) {
+    try {
+      copyFileSync(oldDb, targetDb)
+      const oldWal = oldDb + '-wal'
+      const oldShm = oldDb + '-shm'
+      if (existsSync(oldWal)) copyFileSync(oldWal, targetDb + '-wal')
+      if (existsSync(oldShm)) copyFileSync(oldShm, targetDb + '-shm')
+    } catch (e) { /* ignore migration errors */ }
+  }
 }
 
 app.whenReady().then(() => {
-  const dbDir = app.isPackaged
-    ? dirname(app.getPath('exe'))
-    : app.getPath('userData')
+  const dbDir = app.getPath('userData')
+  migrateOldDb(dbDir)
   db = createDb(dbDir)
   setupIpc()
   createWindow()
