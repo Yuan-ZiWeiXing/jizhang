@@ -1,7 +1,7 @@
 <template>
   <div class="downstream-page">
     <div class="ds-header">
-      <span class="ds-title"><i class="pi pi-users"></i> 出货商管理</span>
+      <span class="ds-title"><i class="pi pi-users"></i> 下游管理</span>
       <div class="ds-toolbar-filters">
         <span class="ds-tf-label">记账类型</span>
         <Select
@@ -14,17 +14,17 @@
           class="ds-tf-select"
         />
       </div>
-      <Button label="添加出货商" icon="pi pi-plus" size="small" @click="openAdd" />
+      <Button label="添加下游" icon="pi pi-plus" size="small" @click="openAdd" />
     </div>
 
     <div class="ds-list">
       <div v-if="!downstreams.length" class="ds-empty">
         <i class="pi pi-users"></i>
-        <p>暂无出货商，点击添加</p>
+        <p>暂无下游，点击添加</p>
       </div>
       <div v-else-if="!filteredDownstreams.length" class="ds-empty">
         <i class="pi pi-filter-slash"></i>
-        <p>当前记账类型下暂无出货商</p>
+        <p>当前记账类型下暂无下游</p>
       </div>
       <div
         v-for="ds in filteredDownstreams"
@@ -80,7 +80,7 @@
       </div>
     </div>
 
-    <Dialog v-model:visible="showAdd" modal header="添加出货商" :style="{width:'400px'}" :draggable="false">
+    <Dialog v-model:visible="showAdd" modal header="添加下游" :style="{width:'400px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:10px;">
         <div>
           <label class="field-label">归属记账类型（可多选）</label>
@@ -98,7 +98,7 @@
         </div>
         <div>
           <label class="field-label">名称</label>
-          <InputText v-model="newName" placeholder="输入出货商名称" class="w-full" />
+          <InputText v-model="newName" placeholder="输入下游名称" class="w-full" />
         </div>
         <div>
           <label class="field-label">初始预付金额（可选）</label>
@@ -111,7 +111,7 @@
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="showRename" modal header="编辑出货商" :style="{width:'400px'}" :draggable="false">
+    <Dialog v-model:visible="showRename" modal header="编辑下游" :style="{width:'400px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:10px;">
         <div>
           <label class="field-label">归属记账类型（可多选）</label>
@@ -140,7 +140,7 @@
 
     <Dialog v-model:visible="showPrepaid" modal header="添加预付金额" :style="{width:'350px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:8px;">
-        <label style="font-size:13px; color:var(--mac-text-secondary)">出货商：{{ prepaidTarget?.name }}</label>
+        <label style="font-size:13px; color:var(--mac-text-secondary)">下游：{{ prepaidTarget?.name }}</label>
         <div v-if="prepaidTarget?.prepaid" style="font-size:12px; color:var(--mac-text-secondary)">
           当前预付：¥{{ fmt(prepaidTarget.prepaid) }}　剩余：¥{{ fmt(remaining(prepaidTarget)) }}
         </div>
@@ -187,7 +187,6 @@
           <thead>
             <tr>
               <th>日期</th>
-              <th>供应商</th>
               <th>卡片信息</th>
               <th>出账金额</th>
               <th>汇率</th>
@@ -198,7 +197,6 @@
           <tbody>
             <tr v-for="r in filteredDsRecords" :key="r.id">
               <td>{{ r.out_date || r.record_date || '-' }}</td>
-              <td>{{ supplierName(r.group_id) }}</td>
               <td><span class="card-inline">{{ r.card_no }} {{ r.card_date }} {{ r.cvv }}</span></td>
               <td>{{ csym(r.currency) }}{{ fmt(r.out_amount) }}</td>
               <td>{{ r.out_rate }}</td>
@@ -208,7 +206,7 @@
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="5" style="text-align:right; font-weight:600">合计</td>
+              <td colspan="4" style="text-align:right; font-weight:600">合计</td>
               <td style="font-weight:700">¥{{ fmt(dsRecordsTotal) }}</td>
               <td></td>
             </tr>
@@ -380,7 +378,7 @@ async function doAdd() {
   newPrepaid.value = 0
   showAdd.value = false
   await load()
-  toast.add({ severity: 'success', summary: '已添加出货商', life: 2000 })
+  toast.add({ severity: 'success', summary: '已添加下游', life: 2000 })
 }
 
 function openRename(ds) {
@@ -437,7 +435,7 @@ async function openRecords(ds) {
 
 function doDelete(ds) {
   confirm.require({
-    message: `确定删除出货商"${ds.name}"？关联的资金记录将取消关联。`,
+    message: `确定删除下游"${ds.name}"？关联的资金记录将取消关联。`,
     header: '确认删除',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: '删除',

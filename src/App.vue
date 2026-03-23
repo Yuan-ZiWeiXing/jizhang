@@ -7,7 +7,7 @@
           <i class="pi pi-plus"></i>
         </button>
       </div>
-      <div class="mac-title">记账本</div>
+      <div class="mac-title">紫微星记账工具</div>
       <div class="mac-controls">
         <span class="mac-btn mac-minimize" @click="winMinimize" title="最小化"></span>
         <span class="mac-btn mac-maximize" @click="winMaximize" title="最大化"></span>
@@ -62,7 +62,7 @@
             @click="currentView = 'downstream'"
           >
             <i class="pi pi-users"></i>
-            <span>出货商</span>
+            <span>下游</span>
           </div>
         </div>
 

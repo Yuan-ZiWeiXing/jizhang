@@ -84,7 +84,7 @@ async function getOrCreateRelease() {
     const body = JSON.stringify({
       tag_name: TAG,
       name: TAG,
-      body: `## 记账本 ${TAG}\n\n### 安装\n下载下方 \`记账本 Setup ${ver}.exe\` 安装即可。`,
+      body: `## 紫微星记账工具 ${TAG}\n\n### 安装\n下载下方 \`紫微星记账工具 Setup ${ver}.exe\` 安装即可。`,
       draft: false,
       prerelease: false,
     })
@@ -129,8 +129,8 @@ async function main() {
   const releases = await getOrCreateRelease()
   const uploadUrl = releases.upload_url.replace(/\{\?name,label\}/, '')
   const files = [
-    join(root, 'release', `记账本 Setup ${ver}.exe`),
-    join(root, 'release', `记账本 Setup ${ver}.exe.blockmap`),
+    join(root, 'release', `紫微星记账工具 Setup ${ver}.exe`),
+    join(root, 'release', `紫微星记账工具 Setup ${ver}.exe.blockmap`),
     join(root, 'release', 'latest.yml'),
   ]
   for (const fp of files) {

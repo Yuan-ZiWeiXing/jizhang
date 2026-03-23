@@ -97,7 +97,7 @@ console.log('\n🎉 创建 GitHub Release...')
 const releaseInfo = await githubApi('POST', `/repos/${OWNER}/${REPO}/releases`, {
   tag_name: `v${newVersion}`,
   name: `v${newVersion}`,
-  body: `## 记账本 v${newVersion}\n\n### 安装\n下载下方 \`记账本 Setup ${newVersion}.exe\` 安装即可。`,
+  body: `## 紫微星记账工具 v${newVersion}\n\n### 安装\n下载下方 \`紫微星记账工具 Setup ${newVersion}.exe\` 安装即可。`,
   draft: false,
   prerelease: false,
 })

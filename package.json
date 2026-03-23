@@ -37,7 +37,7 @@
   },
   "build": {
     "appId": "com.jizhang.app",
-    "productName": "记账本",
+    "productName": "紫微星记账工具",
     "directories": {
       "output": "release"
     },

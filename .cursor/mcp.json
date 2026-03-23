@@ -3,7 +3,7 @@
 		"project-dev-workflow": {
 			"command": "C:\\Program Files\\nodejs\\node.exe",
 			"args": [
-				"c:\\Users\\Administrator\\.cursor\\extensions\\codefree.codefree-cursor-unlimit-3.7.5\\dist\\mcp-server.js",
+				"c:\\Users\\Administrator\\.cursor\\extensions\\codefree.codefree-cursor-unlimit-3.7.6\\dist\\mcp-server.js",
 				"--channel",
 				"dynamic",
 				"--workspace",

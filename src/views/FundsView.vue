@@ -53,7 +53,7 @@
           <Select v-model="statsCurrency" :options="allCurrencies" placeholder="全部" showClear class="filter-select" />
         </div>
         <div class="filter-item">
-          <label>出货商</label>
+          <label>下游</label>
           <InputText v-model="statsOutTo" placeholder="搜索..." class="filter-text" />
         </div>
         <Button v-if="hasStatsFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearStatsFilters" />
@@ -233,7 +233,7 @@
         </DatePicker>
       </div>
       <div class="filter-item">
-        <label>出货商</label>
+        <label>下游</label>
         <InputText v-model="dtFilters.out_to.value" placeholder="搜索..." class="filter-text" />
       </div>
       <Button v-if="hasManageFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearManageFilters" />
@@ -484,9 +484,9 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>出货商</label>
-          <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
-          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加、勾选「资金」并保持启用。</p>
+          <label>下游</label>
+          <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择下游" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类下游，请在「下游」页添加、勾选「资金」并保持启用。</p>
           <div v-if="selectedDownstream" class="ds-hint">
             预付剩余：¥{{ fmtNum((selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0)) }}
             <template v-if="(selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0) > 0">
@@ -531,15 +531,15 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>出货商</label>
-          <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
-          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加并保持启用。</p>
+          <label>下游</label>
+          <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择下游" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类下游，请在「下游」页添加并保持启用。</p>
         </div>
         <div class="form-field">
           <label>出账汇率</label>
           <InputNumber v-model="batchEditForm.out_rate" class="w-full" :minFractionDigits="4" />
         </div>
-        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额。选择出货商后，预付余额内的记录自动结算。</div>
+        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额。选择下游后，预付余额内的记录自动结算。</div>
       </div>
       <template #footer>
         <Button label="取消" text @click="showBatchEdit = false" />
@@ -1071,7 +1071,7 @@ const exportFields = ref([
   { key: 'out_rate', label: '出账汇率', checked: true },
   { key: 'out_total', label: '出账合计', checked: true },
   { key: 'out_date', label: '出账日期', checked: true },
-  { key: 'out_to', label: '出货商', checked: true },
+  { key: 'out_to', label: '下游', checked: true },
   { key: 'profit', label: '盈利', checked: true },
   { key: 'settled', label: '结算', checked: true },
 ])
