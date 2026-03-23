@@ -33,9 +33,13 @@ contextBridge.exposeInMainWorld('api', {
   updateFundOut: (id, data) => ipcRenderer.invoke('funds:updateOut', id, data),
   deleteFund: (id) => ipcRenderer.invoke('funds:delete', id),
   addFundsBatch: (rows) => ipcRenderer.invoke('funds:addBatch', rows),
+  updateFundSettled: (id, settled) => ipcRenderer.invoke('funds:updateSettled', id, settled),
+  batchUpdateSettled: (ids, settled) => ipcRenderer.invoke('funds:batchUpdateSettled', ids, settled),
   getFundsByGroup: (groupId) => ipcRenderer.invoke('funds:getByGroup', groupId),
   getAllFundGroups: () => ipcRenderer.invoke('fundGroups:getAll'),
   addFundGroup: (name) => ipcRenderer.invoke('fundGroups:add', name),
   renameFundGroup: (id, name) => ipcRenderer.invoke('fundGroups:rename', id, name),
   deleteFundGroup: (id) => ipcRenderer.invoke('fundGroups:delete', id),
+  updateGroupPrepaid: (id, prepaid) => ipcRenderer.invoke('fundGroups:updatePrepaid', id, prepaid),
+  addGroupPrepaidUsed: (groupId, amount) => ipcRenderer.invoke('fundGroups:addPrepaidUsed', groupId, amount),
 })

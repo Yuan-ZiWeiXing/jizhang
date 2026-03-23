@@ -45,6 +45,8 @@ export function createDb(userDataPath) {
     CREATE TABLE IF NOT EXISTS fund_groups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      prepaid REAL DEFAULT 0,
+      prepaid_used REAL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -64,6 +66,7 @@ export function createDb(userDataPath) {
       out_date TEXT DEFAULT '',
       out_to TEXT DEFAULT '',
       currency TEXT DEFAULT 'USD',
+      settled INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `)
@@ -75,6 +78,10 @@ export function createDb(userDataPath) {
   try { db.exec("ALTER TABLE funds ADD COLUMN out_date TEXT DEFAULT ''") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN currency TEXT DEFAULT 'USD'") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN settled INTEGER DEFAULT 0") } catch(e) {}
+  try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid REAL DEFAULT 0") } catch(e) {}
+  try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid_used REAL DEFAULT 0") } catch(e) {}
+  try { db.exec("ALTER TABLE fund_groups DROP COLUMN prepaid_offset") } catch(e) {}
 
 
   // Seed categories if empty
@@ -131,6 +138,16 @@ export function createDb(userDataPath) {
       db.prepare('UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=? WHERE id=?').run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
+    updateFundSettled(id, settled) {
+      db.prepare('UPDATE funds SET settled = ? WHERE id = ?').run(settled ? 1 : 0, id)
+      return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
+    },
+    batchUpdateSettled(ids, settled) {
+      const stmt = db.prepare('UPDATE funds SET settled = ? WHERE id = ?')
+      const run = db.transaction((list) => { for (const id of list) stmt.run(settled ? 1 : 0, id) })
+      run(ids)
+      return { ok: true, count: ids.length }
+    },
     deleteFund(id) {
       db.prepare('DELETE FROM funds WHERE id = ?').run(id)
       return { ok: true }
@@ -156,6 +173,14 @@ export function createDb(userDataPath) {
     renameFundGroup(id, name) {
       db.prepare('UPDATE fund_groups SET name = ? WHERE id = ?').run(name, id)
       return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(id)
+    },
+    updateGroupPrepaid(id, prepaid) {
+      db.prepare('UPDATE fund_groups SET prepaid = ?, prepaid_used = 0 WHERE id = ?').run(prepaid, id)
+      return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(id)
+    },
+    addGroupPrepaidUsed(groupId, amount) {
+      db.prepare('UPDATE fund_groups SET prepaid_used = prepaid_used + ? WHERE id = ?').run(amount, groupId)
+      return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(groupId)
     },
     deleteFundGroup(id) {
       db.prepare('UPDATE funds SET group_id = NULL WHERE group_id = ?').run(id)

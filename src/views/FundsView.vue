@@ -156,12 +156,85 @@
       </div>
     </div>
 
+    <!-- Prepaid Info Bar -->
+    <div v-if="activeGroup !== null && activeGroupData" class="prepaid-bar">
+      <div class="prepaid-info">
+        <template v-if="activeGroupData.prepaid">
+          <span class="prepaid-label">预付</span>
+          <span class="prepaid-val">¥{{ fmtNum(activeGroupData.prepaid) }}</span>
+          <span class="prepaid-sep">|</span>
+          <span class="prepaid-label">已用</span>
+          <span class="prepaid-val">¥{{ fmtNum(prepaidUsed) }}</span>
+          <span class="prepaid-sep">|</span>
+          <span class="prepaid-label">剩余</span>
+          <span class="prepaid-val" :class="{ 'prepaid-low': prepaidRemaining <= 0 }">¥{{ fmtNum(prepaidRemaining) }}</span>
+          <span v-if="prepaidRemaining <= 0" class="prepaid-warn"><i class="pi pi-exclamation-triangle"></i> 预付已用完</span>
+        </template>
+        <template v-else>
+          <span class="prepaid-label">未设置预付</span>
+        </template>
+      </div>
+      <Button icon="pi pi-pencil" text size="small" @click="showPrepaidDialog = true" label="设置预付" />
+    </div>
+
     <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div class="filter-item">
+        <label>日期</label>
+        <DatePicker v-model="filterDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
+          <template #buttonbar="{ clearCallback }">
+            <div class="dp-btnbar">
+              <Button size="small" label="今天" severity="secondary" @click="filterDateRange = daysRange(0)" />
+              <Button size="small" label="近3天" severity="secondary" @click="filterDateRange = daysRange(3)" />
+              <Button size="small" label="近7天" severity="secondary" @click="filterDateRange = daysRange(7)" />
+              <Button size="small" label="近30天" severity="secondary" @click="filterDateRange = daysRange(30)" />
+              <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterDateRange = null" />
+            </div>
+          </template>
+        </DatePicker>
+      </div>
+      <div class="filter-item">
+        <label>货币</label>
+        <Select v-model="dtFilters.currency.value" :options="currencyFilterOptions" placeholder="全部" showClear class="filter-select" />
+      </div>
+      <div class="filter-item">
+        <label>卡号</label>
+        <InputText v-model="dtFilters.card_no.value" placeholder="搜索..." class="filter-text" />
+      </div>
+      <div class="filter-item">
+        <label>状态</label>
+        <Select v-model="dtFilters.status.value" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
+      </div>
+      <div class="filter-item">
+        <label>出账日期</label>
+        <DatePicker v-model="filterOutDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
+          <template #buttonbar="{ clearCallback }">
+            <div class="dp-btnbar">
+              <Button size="small" label="今天" severity="secondary" @click="filterOutDateRange = daysRange(0)" />
+              <Button size="small" label="近7天" severity="secondary" @click="filterOutDateRange = daysRange(7)" />
+              <Button size="small" label="近30天" severity="secondary" @click="filterOutDateRange = daysRange(30)" />
+              <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterOutDateRange = null" />
+            </div>
+          </template>
+        </DatePicker>
+      </div>
+      <div class="filter-item">
+        <label>出货商</label>
+        <InputText v-model="dtFilters.out_to.value" placeholder="搜索..." class="filter-text" />
+      </div>
+      <div class="filter-item">
+        <label>结算</label>
+        <Select v-model="settledFilter" :options="settledOptions" optionLabel="label" optionValue="value" placeholder="全部" showClear class="filter-select" />
+      </div>
+      <Button v-if="hasManageFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearManageFilters" />
+    </div>
 
     <!-- Batch Actions Bar -->
     <div v-if="selectedFunds.length" class="batch-bar">
       <span class="batch-info">已选 {{ selectedFunds.length }} 项</span>
       <Button label="批量出账" icon="pi pi-pencil" size="small" @click="openBatchEdit" />
+      <Button label="标记已结" icon="pi pi-check-circle" size="small" severity="success" @click="batchToggleSettled(true)" />
+      <Button label="标记未结" icon="pi pi-circle" size="small" severity="secondary" @click="batchToggleSettled(false)" />
       <Button label="批量删除" icon="pi pi-trash" size="small" severity="danger" @click="batchDelete" />
       <Button label="取消选择" text size="small" @click="selectedFunds = []" />
     </div>
@@ -175,7 +248,6 @@
       <DataTable
         :value="filteredFunds"
         v-model:selection="selectedFunds"
-        v-model:filters="dtFilters"
         dataKey="id"
         stripedRows
         scrollable
@@ -186,8 +258,6 @@
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
         currentPageReportTemplate="共 {totalRecords} 条，第 {first}-{last} 条"
         :virtualScrollerOptions="filteredFunds.length > 200 ? { itemSize: 46 } : undefined"
-        filterDisplay="row"
-        :globalFilterFields="['card_no', 'out_to', 'record_date']"
         contextMenu
         v-model:contextMenuSelection="ctxRow"
         @rowContextmenu="onRowCtx"
@@ -195,39 +265,20 @@
         class="funds-table"
       >
         <Column selectionMode="multiple" style="width:28px" />
-        <Column field="record_date" header="日期" :showFilterMenu="false" style="min-width:100px">
+        <Column field="record_date" header="日期" style="min-width:100px">
           <template #body="{data}">
             <span v-if="data.record_date" class="record-date">{{ data.record_date }}</span>
             <span v-else class="no-data">-</span>
           </template>
-          <template #filter="{ filterModel, filterCallback }">
-            <DatePicker v-model="filterDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="日期范围" showIcon showButtonBar appendTo="body" class="dt-filter-date" @update:modelValue="filterCallback()">
-              <template #buttonbar="{ clearCallback }">
-                <div class="dp-btnbar">
-                  <Button size="small" label="今天" severity="secondary" @click="filterDateRange = daysRange(0); filterCallback()" />
-                  <Button size="small" label="近3天" severity="secondary" @click="filterDateRange = daysRange(3); filterCallback()" />
-                  <Button size="small" label="近7天" severity="secondary" @click="filterDateRange = daysRange(7); filterCallback()" />
-                  <Button size="small" label="近30天" severity="secondary" @click="filterDateRange = daysRange(30); filterCallback()" />
-                  <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterDateRange = null; filterCallback()" />
-                </div>
-              </template>
-            </DatePicker>
-          </template>
         </Column>
-        <Column field="currency" header="货币" :showFilterMenu="false" style="min-width:20px">
+        <Column field="currency" header="货币" style="min-width:20px">
           <template #body="{data}">
             <Tag :value="data.currency || 'USD'" severity="info" />
           </template>
-          <template #filter="{ filterModel, filterCallback }">
-            <Select v-model="filterModel.value" @change="filterCallback()" :options="currencyFilterOptions" placeholder="全部" :showClear="true" class="dt-filter-select" />
-          </template>
         </Column>
-        <Column field="card_no" header="卡片信息" :showFilterMenu="false" style="min-width:240px">
+        <Column field="card_no" header="卡片信息" style="min-width:240px">
           <template #body="{data}">
             <span class="card-inline">{{ data.card_no }} {{ data.card_date }} {{ data.cvv }}</span>
-          </template>
-          <template #filter="{ filterModel, filterCallback }">
-            <InputText v-model="filterModel.value" type="text" @input="filterCallback()" placeholder="搜索卡号" class="dt-filter-input" />
           </template>
         </Column>
         <Column v-if="activeGroup === null" header="分组" style="min-width:70px">
@@ -236,12 +287,9 @@
             <span v-else class="no-data">-</span>
           </template>
         </Column>
-        <Column field="status" header="状态" :showFilterMenu="false" style="min-width:90px">
+        <Column field="status" header="状态" style="min-width:90px">
           <template #body="{data}">
             <span class="status-tag" :class="statusClass(data.status)">{{ data.status }}</span>
-          </template>
-          <template #filter="{ filterModel, filterCallback }">
-            <Select v-model="filterModel.value" @change="filterCallback()" :options="statusOptions" placeholder="全部" :showClear="true" class="dt-filter-select" />
           </template>
         </Column>
         <Column header="进账" style="min-width:90px">
@@ -272,7 +320,7 @@
             <span v-else class="no-data">-</span>
           </template>
         </Column>
-        <Column field="out_to" header="出货信息" :showFilterMenu="false" style="min-width:120px">
+        <Column field="out_to" header="出货信息" style="min-width:120px">
           <template #body="{data}">
             <div v-if="data.out_date || data.out_to" class="out-info-cell">
               <span v-if="data.out_date" class="record-date">{{ data.out_date }}</span>
@@ -280,19 +328,12 @@
             </div>
             <span v-else class="no-data">-</span>
           </template>
-          <template #filter="{ filterModel, filterCallback }">
-            <div class="out-filter-group">
-              <DatePicker v-model="filterOutDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="出账日期" showIcon showButtonBar appendTo="body" class="dt-filter-date" @update:modelValue="filterCallback()">
-                <template #buttonbar="{ clearCallback }">
-                  <div class="dp-btnbar">
-                    <Button size="small" label="今天" severity="secondary" @click="filterOutDateRange = daysRange(0); filterCallback()" />
-                    <Button size="small" label="近7天" severity="secondary" @click="filterOutDateRange = daysRange(7); filterCallback()" />
-                    <Button size="small" label="近30天" severity="secondary" @click="filterOutDateRange = daysRange(30); filterCallback()" />
-                    <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterOutDateRange = null; filterCallback()" />
-                  </div>
-                </template>
-              </DatePicker>
-              <InputText v-model="filterModel.value" type="text" @input="filterCallback()" placeholder="搜索出货商" class="dt-filter-input" />
+        </Column>
+        <Column field="settled" header="结算" style="min-width:60px">
+          <template #body="{data}">
+            <div class="settle-switch" :class="{ on: data.settled, disabled: !data.out_amount }" @click="data.out_amount && toggleSettled(data)">
+              <div class="settle-track"><div class="settle-thumb"></div></div>
+              <span>{{ data.settled ? '已结' : '未结' }}</span>
             </div>
           </template>
         </Column>
@@ -551,6 +592,18 @@
       </template>
     </Dialog>
 
+    <!-- Prepaid Dialog -->
+    <Dialog v-model:visible="showPrepaidDialog" modal header="设置预付金额" :style="{width:'350px'}" :draggable="false">
+      <div style="padding-top:8px; display:flex; flex-direction:column; gap:8px;">
+        <label style="font-size:13px; color:var(--mac-text-secondary)">当前分组：{{ activeGroupData?.name }}</label>
+        <InputNumber v-model="prepaidAmount" class="w-full" :minFractionDigits="2" prefix="¥ " placeholder="输入预付金额" />
+      </div>
+      <template #footer>
+        <Button label="取消" text @click="showPrepaidDialog = false" />
+        <Button label="保存" icon="pi pi-check" @click="savePrepaid" />
+      </template>
+    </Dialog>
+
     <!-- Rename Group Dialog -->
     <Dialog v-model:visible="showRenameGroup" modal header="重命名分组" :style="{width:'300px'}" :draggable="false">
       <div style="padding-top:8px">
@@ -614,6 +667,8 @@ const showExport = ref(false)
 const showBatch = ref(false)
 const showAddGroup = ref(false)
 const showRenameGroup = ref(false)
+const showPrepaidDialog = ref(false)
+const prepaidAmount = ref(0)
 const newGroupName = ref('')
 const renameGroupName = ref('')
 const renameGroupId = ref(null)
@@ -642,6 +697,28 @@ const dtFilters = ref({
 
 const filterDateRange = ref(null)
 const filterOutDateRange = ref(null)
+const settledFilter = ref(null)
+const settledOptions = [
+  { label: '已结算', value: 1 },
+  { label: '未结算', value: 0 },
+]
+
+const hasManageFilter = computed(() =>
+  filterDateRange.value || filterOutDateRange.value ||
+  dtFilters.value.currency.value || dtFilters.value.card_no.value ||
+  dtFilters.value.status.value || dtFilters.value.out_to.value ||
+  settledFilter.value !== null
+)
+
+function clearManageFilters() {
+  filterDateRange.value = null
+  filterOutDateRange.value = null
+  dtFilters.value.currency.value = null
+  dtFilters.value.card_no.value = null
+  dtFilters.value.status.value = null
+  dtFilters.value.out_to.value = null
+  settledFilter.value = null
+}
 
 const filteredFunds = computed(() => {
   let list = funds.value
@@ -654,6 +731,20 @@ const filteredFunds = computed(() => {
     const [start, end] = filterOutDateRange.value
     if (start) { const s = fmtDate(start); list = list.filter(f => (f.out_date || '') >= s) }
     if (end) { const e = fmtDate(end); list = list.filter(f => (f.out_date || '') <= e) }
+  }
+  const cf = dtFilters.value
+  if (cf.currency.value) list = list.filter(f => (f.currency || 'USD') === cf.currency.value)
+  if (cf.card_no.value) {
+    const kw = cf.card_no.value.toLowerCase()
+    list = list.filter(f => (f.card_no || '').toLowerCase().includes(kw))
+  }
+  if (cf.status.value) list = list.filter(f => f.status === cf.status.value)
+  if (cf.out_to.value) {
+    const kw = cf.out_to.value.toLowerCase()
+    list = list.filter(f => (f.out_to || '').toLowerCase().includes(kw))
+  }
+  if (settledFilter.value !== null) {
+    list = list.filter(f => (f.settled || 0) === settledFilter.value)
   }
   return list
 })
@@ -677,6 +768,39 @@ const groupPendingMap = computed(() => {
 function groupPendingCount(groupId) {
   return groupPendingMap.value[groupId] || 0
 }
+
+const activeGroupData = computed(() => {
+  if (activeGroup.value === null) return null
+  return groups.value.find(g => g.id === activeGroup.value)
+})
+
+const groupInTotal = computed(() => {
+  if (activeGroup.value === null) return 0
+  return allFunds.value
+    .filter(f => f.group_id === activeGroup.value)
+    .reduce((s, f) => s + f.in_amount * f.in_rate, 0)
+})
+
+const prepaidUsed = computed(() => activeGroupData.value?.prepaid_used || 0)
+
+const prepaidRemaining = computed(() => {
+  const prepaid = activeGroupData.value?.prepaid || 0
+  if (!prepaid) return 0
+  return prepaid - prepaidUsed.value
+})
+
+async function savePrepaid() {
+  if (!window.api || !activeGroupData.value) return
+  const result = await window.api.updateGroupPrepaid(activeGroupData.value.id, prepaidAmount.value || 0)
+  activeGroupData.value.prepaid = result.prepaid
+  activeGroupData.value.prepaid_used = result.prepaid_used
+  showPrepaidDialog.value = false
+  toast.add({ severity: 'success', summary: '预付金额已更新', life: 2000 })
+}
+
+watch(showPrepaidDialog, (v) => {
+  if (v && activeGroupData.value) prepaidAmount.value = activeGroupData.value.prepaid || 0
+})
 
 const allCurrencies = ['USD', 'EUR', 'AUD', 'CAD']
 
@@ -875,6 +999,7 @@ const exportFields = ref([
   { key: 'out_date', label: '出账日期', checked: true },
   { key: 'out_to', label: '出货商', checked: true },
   { key: 'profit', label: '盈利', checked: true },
+  { key: 'settled', label: '结算', checked: true },
 ])
 
 const ctxItems = [
@@ -1038,6 +1163,13 @@ async function submitBatch() {
   const cur = batchCurrency.value || 'USD'
   const plain = JSON.parse(JSON.stringify(batchRows.value)).map(r => ({ ...r, group_id: activeGroup.value, record_date: rd, currency: cur }))
   await window.api.addFundsBatch(plain)
+  if (activeGroup.value && activeGroupData.value?.prepaid) {
+    const totalInRmb = plain.reduce((s, r) => s + (r.in_amount || 0) * (r.in_rate || 1), 0)
+    if (totalInRmb > 0) {
+      const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, totalInRmb)
+      if (updated && activeGroupData.value) activeGroupData.value.prepaid_used = updated.prepaid_used
+    }
+  }
   await load()
   showBatch.value = false
   batchInput.value = ''
@@ -1075,6 +1207,11 @@ async function submitAdd() {
     currency: form.value.currency || 'USD',
   })
   funds.value.unshift(saved)
+  const inRmb = (Number(form.value.in_amount) || 0) * (Number(form.value.in_rate) || 1)
+  if (inRmb > 0 && activeGroup.value && activeGroupData.value?.prepaid) {
+    const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, inRmb)
+    if (updated && activeGroupData.value) activeGroupData.value.prepaid_used = updated.prepaid_used
+  }
   form.value = emptyForm()
   quickInput.value = ''
   showAdd.value = false
@@ -1175,6 +1312,27 @@ function batchDelete() {
   })
 }
 
+async function toggleSettled(fund) {
+  if (!window.api) return
+  const newVal = fund.settled ? 0 : 1
+  await window.api.updateFundSettled(fund.id, newVal)
+  fund.settled = newVal
+  const af = allFunds.value.find(f => f.id === fund.id)
+  if (af) af.settled = newVal
+}
+
+async function batchToggleSettled(settled) {
+  if (!window.api || !selectedFunds.value.length) return
+  const ids = selectedFunds.value.map(f => f.id)
+  await window.api.batchUpdateSettled(ids, settled)
+  for (const f of selectedFunds.value) f.settled = settled ? 1 : 0
+  for (const f of allFunds.value) {
+    if (ids.includes(f.id)) f.settled = settled ? 1 : 0
+  }
+  toast.add({ severity: 'success', summary: `已${settled ? '结算' : '取消结算'} ${ids.length} 条`, life: 2000 })
+  selectedFunds.value = []
+}
+
 function doExport() {
   if (!selectedFunds.value.length) { toast.add({ severity: 'warn', summary: '请先选中要导出的记录', life: 2000 }); return }
   const data = selectedFunds.value
@@ -1191,6 +1349,7 @@ function doExport() {
       else if (f.key === 'card_no') val = String(row.card_no ?? '')
       else if (f.key === 'card_date') val = String(row.card_date ?? '')
       else if (f.key === 'cvv') val = String(row.cvv ?? '')
+      else if (f.key === 'settled') val = row.settled ? '已结算' : '未结算'
       else val = row[f.key] ?? ''
       obj[f.label] = val
     }
@@ -1369,11 +1528,31 @@ function fmtDate(d) {
 }
 .tab-add:hover { color: var(--mac-accent, #007aff); }
 
+.prepaid-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--mac-border);
+  background: rgba(0,122,255,0.04);
+  flex-shrink: 0;
+}
+.prepaid-info { display: flex; align-items: center; gap: 8px; }
+.prepaid-label { font-size: 12px; color: var(--mac-text-secondary); }
+.prepaid-val { font-size: 13px; font-weight: 700; color: var(--mac-text); }
+.prepaid-val.prepaid-low { color: #ff3b30; }
+.prepaid-sep { color: var(--mac-border); font-size: 12px; }
+.prepaid-warn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; color: #ff3b30;
+  background: rgba(255,59,48,0.1); padding: 2px 8px; border-radius: 10px;
+  margin-left: 4px;
+}
+
 .filter-bar {
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--mac-border);
   background: rgba(255,255,255,0.3);
+  flex-shrink: 0;
 }
 .filter-item { display: flex; align-items: center; gap: 6px; }
 .filter-item label { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); white-space: nowrap; }
@@ -1440,6 +1619,26 @@ function fmtDate(d) {
 
 .record-date { font-size: 13px; color: var(--mac-text); font-family: 'SF Mono', 'Fira Mono', monospace; }
 .dp-btnbar { display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.settle-switch {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11px; font-weight: 600; color: var(--mac-text-secondary);
+  user-select: none;
+}
+.settle-switch.disabled { opacity: 0.35; cursor: not-allowed; }
+.settle-switch.on { color: #34c759; }
+.settle-track {
+  width: 32px; height: 18px; border-radius: 9px;
+  background: rgba(0,0,0,0.15); position: relative; transition: background 0.2s;
+  flex-shrink: 0;
+}
+.settle-switch.on .settle-track { background: #34c759; }
+.settle-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; position: absolute; top: 2px; left: 2px;
+  transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.settle-switch.on .settle-thumb { transform: translateX(14px); }
+
 .status-tag {
   display: inline-block; padding: 3px 10px; border-radius: 12px;
   font-size: 12px; font-weight: 600; text-align: center;
