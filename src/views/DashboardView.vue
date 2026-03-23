@@ -540,9 +540,7 @@ function doDelete(id) { deleteRecord(id) }
 .stat-card.expense .stat-icon { background: rgba(255,59,48,0.15); color: var(--mac-red); }
 .stat-card.balance .stat-icon { background: rgba(0,122,255,0.15); color: var(--mac-accent); }
 .stat-label { font-size: 11px; color: var(--mac-text-secondary); margin-bottom: 2px; }
-.stat-value { font-size: 16px; font-weight: 600; color: var(--mac-text); }
-.stat-value.pos { color: var(--mac-green); }
-.stat-value.neg { color: var(--mac-red); }
+.stat-value { font-size: 16px; font-weight: 700; color: var(--mac-text); }
 
 /* Funds mini stats */
 .funds-mini-stats {
@@ -551,10 +549,7 @@ function doDelete(id) { deleteRecord(id) }
 }
 .fms-item { display: flex; align-items: center; gap: 4px; }
 .fms-label { font-size: 11px; color: var(--mac-text-secondary); }
-.fms-val { font-size: 13px; font-weight: 600; color: var(--mac-text); }
-.fms-val.warning { color: #ff9500; }
-.fms-val.success { color: #34c759; }
-.fms-val.danger { color: #ff3b30; }
+.fms-val { font-size: 13px; font-weight: 700; color: var(--mac-text); }
 
 /* Category preview */
 .cat-list-preview { display: flex; flex-direction: column; gap: 5px; }
@@ -572,7 +567,7 @@ function doDelete(id) { deleteRecord(id) }
 .cat-name-sm { font-size: 12px; font-weight: 500; color: var(--mac-text); min-width: 44px; }
 .cat-bar-sm { flex: 1; height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; overflow: hidden; }
 .cat-bar-fill-sm { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
-.cat-amt-sm { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); min-width: 65px; text-align: right; }
+.cat-amt-sm { font-size: 12px; font-weight: 700; color: var(--mac-text); min-width: 65px; text-align: right; }
 
 /* Recent records */
 .records-list { display: flex; flex-direction: column; gap: 4px; }
@@ -593,9 +588,7 @@ function doDelete(id) { deleteRecord(id) }
 .record-info { flex: 1; min-width: 0; }
 .record-name { font-size: 13px; font-weight: 500; color: var(--mac-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-date-text { font-size: 11px; color: var(--mac-text-secondary); margin-top: 1px; }
-.record-amount { font-size: 14px; font-weight: 600; flex-shrink: 0; }
-.record-amount.income { color: var(--mac-green); }
-.record-amount.expense { color: var(--mac-red); }
+.record-amount { font-size: 14px; font-weight: 700; color: var(--mac-text); flex-shrink: 0; }
 
 /* Records Tab */
 .filter-bar {
@@ -610,9 +603,7 @@ function doDelete(id) { deleteRecord(id) }
 }
 .ftab.active { background: #fff; color: var(--mac-text); font-weight: 500; box-shadow: var(--shadow-sm); }
 .filter-summary { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-.sum-item { color: var(--mac-text); }
-.sum-item.income { color: var(--mac-green); }
-.sum-item.expense { color: var(--mac-red); }
+.sum-item { color: var(--mac-text); font-weight: 600; }
 .sum-divider { color: var(--mac-border); }
 
 .records-scroll { flex: 1; display: flex; flex-direction: column; gap: 14px; }
@@ -644,9 +635,7 @@ function doDelete(id) { deleteRecord(id) }
 .rec-info { flex: 1; min-width: 0; }
 .rec-title { font-size: 13px; font-weight: 500; color: var(--mac-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rec-sub { font-size: 11px; color: var(--mac-text-secondary); margin-top: 1px; }
-.rec-amount { font-size: 14px; font-weight: 600; flex-shrink: 0; }
-.rec-amount.income { color: var(--mac-green); }
-.rec-amount.expense { color: var(--mac-red); }
+.rec-amount { font-size: 14px; font-weight: 700; color: var(--mac-text); flex-shrink: 0; }
 .del-btn {
   width: 22px; height: 22px; border: none;
   background: rgba(255,59,48,0.12); color: var(--mac-red);
@@ -670,8 +659,6 @@ function doDelete(id) { deleteRecord(id) }
 }
 .total-label { font-size: 12px; color: var(--mac-text-secondary); margin-bottom: 6px; }
 .total-amount { font-size: 32px; font-weight: 700; color: var(--mac-text); }
-.total-amount.expense { color: var(--mac-red); }
-.total-amount.income { color: var(--mac-green); }
 
 /* Time stats row */
 .time-stats-row {
@@ -683,9 +670,7 @@ function doDelete(id) { deleteRecord(id) }
   box-shadow: var(--shadow-sm);
 }
 .ts-label { font-size: 11px; color: var(--mac-text-secondary); margin-bottom: 4px; font-weight: 500; }
-.ts-value { font-size: 22px; font-weight: 700; }
-.ts-value.expense { color: var(--mac-red); }
-.ts-value.income { color: var(--mac-green); }
+.ts-value { font-size: 22px; font-weight: 700; color: var(--mac-text); }
 .ts-count { font-size: 11px; color: var(--mac-text-secondary); margin-top: 2px; }
 
 .section-title { font-size: 14px; font-weight: 600; color: var(--mac-text); margin-bottom: 10px; }
@@ -698,9 +683,7 @@ function doDelete(id) { deleteRecord(id) }
 .cat-stat-info { flex: 1; min-width: 0; }
 .cat-stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .cat-name { font-size: 13px; font-weight: 500; color: var(--mac-text); }
-.cat-amount { font-size: 13px; font-weight: 600; }
-.cat-amount.expense { color: var(--mac-red); }
-.cat-amount.income { color: var(--mac-green); }
+.cat-amount { font-size: 13px; font-weight: 700; color: var(--mac-text); }
 .progress-bar-bg { height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
 .cat-pct { font-size: 10px; color: var(--mac-text-secondary); margin-top: 2px; }

@@ -111,43 +111,17 @@
       </div>
 
       <div class="fs-section">
-        <div class="fs-section-title">按状态统计</div>
-        <div class="fs-status-list">
-          <div v-for="s in statsData.byStatus" :key="s.status" class="fs-status-row">
-            <Tag :severity="s.status === '盈利' ? 'success' : s.status === '亏损' ? 'danger' : 'warning'" :value="s.status" />
-            <span class="fs-status-count">{{ s.count }} 条</span>
-            <div class="fs-status-bar-bg">
-              <div class="fs-status-bar-fill" :style="{ width: s.pct + '%', background: s.status === '盈利' ? '#34c759' : s.status === '亏损' ? '#ff3b30' : '#ff9500' }"></div>
-            </div>
-            <span class="fs-status-amt">进 ¥{{ fmtNum(s.inTotal) }}</span>
-            <span class="fs-status-amt">出 ¥{{ fmtNum(s.outTotal) }}</span>
+        <div class="fs-section-header">
+          <span class="fs-section-title">每日收支趋势</span>
+          <div class="chart-range-tabs">
+            <button v-for="r in chartRangeOptions" :key="r.value" :class="['chart-range-btn', { active: chartRange === r.value }]" @click="chartRange = r.value">{{ r.label }}</button>
           </div>
+        </div>
+        <div class="fs-chart-wrap">
+          <canvas ref="dailyChartCanvas"></canvas>
         </div>
       </div>
 
-      <div class="fs-section" v-if="statsData.byGroup.length">
-        <div class="fs-section-title">按分组统计</div>
-        <div class="fs-group-list">
-          <div v-for="g in statsData.byGroup" :key="g.name" class="fs-group-row">
-            <span class="fs-group-name">{{ g.name }}</span>
-            <span class="fs-group-count">{{ g.count }} 条</span>
-            <span class="fs-group-amt income">进 ¥{{ fmtNum(g.inTotal) }}</span>
-            <span class="fs-group-amt expense">出 ¥{{ fmtNum(g.outTotal) }}</span>
-            <span class="fs-group-amt" :class="g.profit >= 0 ? 'income' : 'expense'">利 ¥{{ fmtNum(g.profit) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="fs-section" v-if="statsData.byOutTo.length">
-        <div class="fs-section-title">按出货商统计</div>
-        <div class="fs-group-list">
-          <div v-for="o in statsData.byOutTo" :key="o.name" class="fs-group-row">
-            <span class="fs-group-name">{{ o.name }}</span>
-            <span class="fs-group-count">{{ o.count }} 条</span>
-            <span class="fs-group-amt expense">出 ¥{{ fmtNum(o.outTotal) }}</span>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Manage View -->
@@ -591,7 +565,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Filler } from 'chart.js'
+
+Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Filler)
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -790,40 +767,91 @@ const statsData = computed(() => {
   }
   const byCurrency = allCurrencies.map(cur => curMap[cur])
 
-  const statusMap = {}
-  for (const f of all) {
-    const st = f.status || '待出账'
-    if (!statusMap[st]) statusMap[st] = { status: st, count: 0, inTotal: 0, outTotal: 0 }
-    statusMap[st].count++
-    statusMap[st].inTotal += f.in_amount * f.in_rate
-    statusMap[st].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
-  }
-  const byStatus = Object.values(statusMap).sort((a, b) => b.count - a.count)
-  const maxCount = Math.max(...byStatus.map(s => s.count), 1)
-  byStatus.forEach(s => { s.pct = (s.count / maxCount) * 100 })
-
-  const groupMap = {}
-  for (const f of all) {
-    const gn = groupName(f.group_id) || '未分组'
-    if (!groupMap[gn]) groupMap[gn] = { name: gn, count: 0, inTotal: 0, outTotal: 0, profit: 0 }
-    groupMap[gn].count++
-    groupMap[gn].inTotal += f.in_amount * f.in_rate
-    groupMap[gn].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
-    groupMap[gn].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
-  }
-  const byGroup = Object.values(groupMap).sort((a, b) => b.count - a.count)
-
-  const outToMap = {}
-  for (const f of all) {
-    if (!f.out_to) continue
-    if (!outToMap[f.out_to]) outToMap[f.out_to] = { name: f.out_to, count: 0, outTotal: 0 }
-    outToMap[f.out_to].count++
-    outToMap[f.out_to].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
-  }
-  const byOutTo = Object.values(outToMap).sort((a, b) => b.outTotal - a.outTotal)
-
-  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency, byStatus, byGroup, byOutTo }
+  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency }
 })
+
+const dailyChartCanvas = ref(null)
+let dailyChartInstance = null
+const chartRange = ref(7)
+const chartRangeOptions = [
+  { label: '7天', value: 7 },
+  { label: '15天', value: 15 },
+  { label: '30天', value: 30 },
+  { label: '全部', value: 0 },
+]
+
+const dailyChartData = computed(() => {
+  const all = statsFilteredFunds.value
+  const dayMap = {}
+  for (const f of all) {
+    const d = f.record_date || '未知'
+    if (!dayMap[d]) dayMap[d] = { inRmb: 0, outRmb: 0, profit: 0 }
+    dayMap[d].inRmb += f.in_amount * f.in_rate
+    dayMap[d].outRmb += (f.out_amount || 0) * (f.out_rate || 1)
+    dayMap[d].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+  }
+
+  const days = chartRange.value
+  let entries = Object.entries(dayMap).sort(([a], [b]) => a.localeCompare(b))
+
+  if (days > 0) {
+    const now = new Date()
+    const labels = []
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      labels.push(d.toISOString().slice(0, 10))
+    }
+    return {
+      labels: labels.map(d => d.slice(5)),
+      inData: labels.map(d => (dayMap[d]?.inRmb || 0)),
+      outData: labels.map(d => (dayMap[d]?.outRmb || 0)),
+      profitData: labels.map(d => (dayMap[d]?.profit || 0)),
+    }
+  }
+
+  return {
+    labels: entries.map(([d]) => d.slice(5)),
+    inData: entries.map(([, v]) => v.inRmb),
+    outData: entries.map(([, v]) => v.outRmb),
+    profitData: entries.map(([, v]) => v.profit),
+  }
+})
+
+function renderDailyChart() {
+  if (!dailyChartCanvas.value) return
+  if (dailyChartInstance) { dailyChartInstance.destroy(); dailyChartInstance = null }
+  const d = dailyChartData.value
+  if (!d.labels.length) return
+  dailyChartInstance = new Chart(dailyChartCanvas.value, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [
+        { label: '进账(¥)', data: d.inData, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '出账(¥)', data: d.outData, borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '盈利(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ¥${ctx.parsed.y.toFixed(2)}` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, callback: v => '¥' + v.toLocaleString() } },
+      },
+    },
+  })
+}
+
+watch(dailyChartData, () => nextTick(renderDailyChart))
+watch(() => topTab.value, v => { if (v === 'stats') nextTick(renderDailyChart) })
+
+onBeforeUnmount(() => { if (dailyChartInstance) dailyChartInstance.destroy() })
 
 const form = ref(emptyForm())
 const quickInput = ref('')
@@ -1246,10 +1274,7 @@ function fmtDate(d) {
   text-align: center; box-shadow: var(--shadow-sm);
 }
 .fs-card-label { font-size: 11px; color: var(--mac-text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; }
-.fs-card-val { font-size: 20px; font-weight: 700; }
-.fs-card-val.income { color: #34c759; }
-.fs-card-val.expense { color: #ff9500; }
-.fs-card-val.neutral { color: var(--mac-text); }
+.fs-card-val { font-size: 20px; font-weight: 700; color: var(--mac-text); }
 
 .fs-currency-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .fs-currency-card {
@@ -1259,34 +1284,23 @@ function fmtDate(d) {
 .fs-cur-header { display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
 .fs-cur-row { display: flex; justify-content: space-between; align-items: center; }
 .fs-cur-label { font-size: 12px; color: var(--mac-text-secondary); }
-.fs-cur-val { font-size: 13px; font-weight: 600; }
-.fs-cur-val.income { color: #34c759; }
-.fs-cur-val.expense { color: #ff9500; }
+.fs-cur-val { font-size: 13px; font-weight: 700; color: var(--mac-text); }
 .fs-cur-divider { height: 1px; background: var(--mac-border); margin: 2px 0; }
+
+.fs-section-header { display: flex; align-items: center; justify-content: space-between; }
+.chart-range-tabs { display: flex; gap: 2px; background: rgba(0,0,0,0.06); border-radius: 8px; padding: 2px; }
+.chart-range-btn {
+  padding: 3px 10px; border: none; background: transparent; border-radius: 6px;
+  font-size: 11px; cursor: pointer; color: var(--mac-text-secondary); transition: all 0.15s;
+}
+.chart-range-btn.active { background: #fff; color: var(--mac-text); font-weight: 600; box-shadow: var(--shadow-sm); }
+.fs-chart-wrap {
+  background: var(--mac-surface); border-radius: 12px; padding: 16px;
+  box-shadow: var(--shadow-sm); height: 330px; position: relative;
+}
 
 .fs-section { display: flex; flex-direction: column; gap: 10px; }
 .fs-section-title { font-size: 14px; font-weight: 600; color: var(--mac-text); }
-
-.fs-status-list { display: flex; flex-direction: column; gap: 8px; }
-.fs-status-row {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--mac-surface); border-radius: 10px; padding: 10px 14px;
-}
-.fs-status-count { font-size: 13px; color: var(--mac-text); font-weight: 500; min-width: 50px; }
-.fs-status-bar-bg { flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; }
-.fs-status-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
-.fs-status-amt { font-size: 12px; color: var(--mac-text-secondary); min-width: 90px; text-align: right; }
-
-.fs-group-list { display: flex; flex-direction: column; gap: 6px; }
-.fs-group-row {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--mac-surface); border-radius: 10px; padding: 10px 14px;
-}
-.fs-group-name { font-size: 13px; font-weight: 600; color: var(--mac-text); min-width: 80px; }
-.fs-group-count { font-size: 12px; color: var(--mac-text-secondary); min-width: 50px; }
-.fs-group-amt { font-size: 12px; font-weight: 600; min-width: 100px; text-align: right; }
-.fs-group-amt.income { color: #34c759; }
-.fs-group-amt.expense { color: #ff9500; }
 
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -1402,9 +1416,7 @@ function fmtDate(d) {
 .stat-cny { font-size: 11px; color: var(--mac-text-secondary); font-weight: 400; }
 .stat-item { display: flex; align-items: center; gap: 6px; }
 .stat-label { font-size: 12px; color: var(--mac-text-secondary); font-weight: 500; }
-.stat-val { font-size: 14px; font-weight: 700; }
-.stat-val.income { color: #34c759; }
-.stat-val.expense { color: #ff9500; }
+.stat-val { font-size: 14px; font-weight: 700; color: var(--mac-text); }
 .group-hint { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mac-text-secondary); gap: 8px; }
 .group-hint i { font-size: 36px; }
 .group-hint p { font-size: 13px; }
@@ -1415,9 +1427,7 @@ function fmtDate(d) {
 .card-badge { font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 11px; color: var(--mac-text-secondary); background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; }
 
 .amount-cell { display: flex; flex-direction: column; gap: 1px; }
-.amount-val { font-weight: 600; font-size: 14px; }
-.amount-val.income { color: #34c759; }
-.amount-val.expense { color: #ff9500; }
+.amount-val { font-weight: 700; font-size: 14px; color: var(--mac-text); }
 .amount-rate { font-size: 12px; color: var(--mac-text-secondary); }
 .amount-total { font-size: 12px; color: var(--mac-text-secondary); font-style: italic; }
 .out-meta { display: flex; gap: 6px; font-size: 11px; color: var(--mac-text-secondary); margin-top: 2px; }
@@ -1426,9 +1436,7 @@ function fmtDate(d) {
 .out-to-cell { font-size: 13px; color: var(--mac-accent, #007aff); font-weight: 500; }
 .out-info-cell { display: flex; flex-direction: column; gap: 2px; }
 
-.profit-cell { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px; }
-.profit-pos { color: #34c759; background: rgba(52,199,89,0.1); }
-.profit-neg { color: #ff3b30; background: rgba(255,59,48,0.1); }
+.profit-cell { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px; color: var(--mac-text); background: rgba(0,0,0,0.04); }
 
 .record-date { font-size: 13px; color: var(--mac-text); font-family: 'SF Mono', 'Fira Mono', monospace; }
 .dp-btnbar { display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap; }
