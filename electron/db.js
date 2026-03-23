@@ -175,7 +175,7 @@ export function createDb(userDataPath) {
       return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(id)
     },
     updateGroupPrepaid(id, prepaid) {
-      db.prepare('UPDATE fund_groups SET prepaid = ?, prepaid_used = 0 WHERE id = ?').run(prepaid, id)
+      db.prepare('UPDATE fund_groups SET prepaid = prepaid + ? WHERE id = ?').run(prepaid, id)
       return db.prepare('SELECT * FROM fund_groups WHERE id = ?').get(id)
     },
     addGroupPrepaidUsed(groupId, amount) {

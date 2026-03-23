@@ -174,7 +174,7 @@
           <span class="prepaid-label">未设置预付</span>
         </template>
       </div>
-      <Button icon="pi pi-pencil" text size="small" @click="showPrepaidDialog = true" label="设置预付" />
+      <Button icon="pi pi-plus" text size="small" @click="showPrepaidDialog = true" label="添加预付" />
     </div>
 
     <!-- Filter Bar -->
@@ -593,14 +593,17 @@
     </Dialog>
 
     <!-- Prepaid Dialog -->
-    <Dialog v-model:visible="showPrepaidDialog" modal header="设置预付金额" :style="{width:'350px'}" :draggable="false">
+    <Dialog v-model:visible="showPrepaidDialog" modal header="添加预付金额" :style="{width:'350px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:8px;">
         <label style="font-size:13px; color:var(--mac-text-secondary)">当前分组：{{ activeGroupData?.name }}</label>
-        <InputNumber v-model="prepaidAmount" class="w-full" :minFractionDigits="2" prefix="¥ " placeholder="输入预付金额" />
+        <div v-if="activeGroupData?.prepaid" style="font-size:12px; color:var(--mac-text-secondary)">
+          当前预付：¥{{ fmtNum(activeGroupData.prepaid) }}　剩余：¥{{ fmtNum(prepaidRemaining) }}
+        </div>
+        <InputNumber v-model="prepaidAmount" class="w-full" :minFractionDigits="2" :min="0" prefix="¥ " placeholder="输入追加金额" />
       </div>
       <template #footer>
         <Button label="取消" text @click="showPrepaidDialog = false" />
-        <Button label="保存" icon="pi pi-check" @click="savePrepaid" />
+        <Button label="添加" icon="pi pi-plus" @click="savePrepaid" :disabled="!prepaidAmount" />
       </template>
     </Dialog>
 
@@ -795,11 +798,11 @@ async function savePrepaid() {
   activeGroupData.value.prepaid = result.prepaid
   activeGroupData.value.prepaid_used = result.prepaid_used
   showPrepaidDialog.value = false
-  toast.add({ severity: 'success', summary: '预付金额已更新', life: 2000 })
+  toast.add({ severity: 'success', summary: '预付已追加', life: 2000 })
 }
 
 watch(showPrepaidDialog, (v) => {
-  if (v && activeGroupData.value) prepaidAmount.value = activeGroupData.value.prepaid || 0
+  if (v) prepaidAmount.value = 0
 })
 
 const allCurrencies = ['USD', 'EUR', 'AUD', 'CAD']
