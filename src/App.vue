@@ -33,19 +33,7 @@
           </div>
         </div>
 
-        <!-- Summary Card -->
-        <div class="sidebar-summary">
-          <div class="summary-row">
-            <span class="summary-label">结余</span>
-            <span class="summary-balance" :class="balance >= 0 ? 'positive' : 'negative'">
-              ¥{{ formatAmount(balance) }}
-            </span>
-          </div>
-          <div class="summary-row small">
-            <span style="color: var(--mac-green)">+¥{{ formatAmount(totalIncome) }}</span>
-            <span style="color: var(--mac-red)">-¥{{ formatAmount(totalExpense) }}</span>
-          </div>
-        </div>
+        <div class="sidebar-spacer"></div>
         <div class="sidebar-version" @click="checkUpdate">
           <span>v{{ appVersion }}</span>
           <i class="pi pi-sync" style="font-size:10px" title="检查更新"></i>
@@ -54,7 +42,7 @@
 
       <!-- Main Content -->
       <div class="mac-main">
-        <component :is="currentComponent" @add="showAddDialog = true" />
+        <component :is="currentComponent" :key="currentView" @add="showAddDialog = true" />
       </div>
     </div>
 
@@ -63,6 +51,7 @@
 
     <!-- Updater Dialog -->
     <UpdaterDialog />
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -73,8 +62,9 @@ import DashboardView from './views/DashboardView.vue'
 import FundsView from './views/FundsView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
+import ConfirmDialog from 'primevue/confirmdialog'
 
-const { totalIncome, totalExpense, balance, initStore } = useStore()
+const { initStore } = useStore()
 
 const appVersion = ref('')
 
@@ -101,10 +91,6 @@ const currentComponent = computed(() => {
   const map = { dashboard: DashboardView, funds: FundsView }
   return map[currentView.value]
 })
-
-function formatAmount(val) {
-  return Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 
 function winClose() { window.api?.close() }
 function winMinimize() { window.api?.minimize() }
@@ -216,17 +202,18 @@ function winMaximize() { window.api?.maximize() }
 }
 
 .mac-sidebar {
-  width: 200px;
+  width: 150px;
   background: var(--mac-sidebar-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--mac-border);
-  padding: 12px 8px;
+  padding: 12px 6px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   gap: 4px;
 }
+.sidebar-spacer { flex: 1; }
 
 .sidebar-label {
   font-size: 11px;
@@ -263,27 +250,6 @@ function winMaximize() { window.api?.maximize() }
   font-weight: 500;
 }
 .sidebar-item.active i { color: var(--mac-accent); }
-
-.sidebar-summary {
-  margin-top: auto;
-  background: rgba(0,0,0,0.04);
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-}
-.summary-label { color: var(--mac-text-secondary); font-size: 11px; }
-.summary-balance { font-size: 16px; font-weight: 600; color: var(--mac-text); }
-.summary-balance.positive { color: var(--mac-green); }
-.summary-balance.negative { color: var(--mac-red); }
-.summary-row.small { font-size: 11px; }
 
 .sidebar-version {
   display: flex; align-items: center; justify-content: center; gap: 6px;

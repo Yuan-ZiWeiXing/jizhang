@@ -49,6 +49,10 @@
           <Select v-model="statsStatus" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
         </div>
         <div class="filter-item">
+          <label>货币</label>
+          <Select v-model="statsCurrency" :options="allCurrencies" placeholder="全部" showClear class="filter-select" />
+        </div>
+        <div class="filter-item">
           <label>出货商</label>
           <InputText v-model="statsOutTo" placeholder="搜索..." class="filter-text" />
         </div>
@@ -57,20 +61,52 @@
 
       <div class="fs-summary-cards">
         <div class="fs-card">
-          <div class="fs-card-label">总进账</div>
+          <div class="fs-card-label">总记录数</div>
+          <div class="fs-card-val neutral">{{ statsData.totalCount }}</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">总进账(¥)</div>
           <div class="fs-card-val income">¥{{ fmtNum(statsData.totalIn) }}</div>
         </div>
         <div class="fs-card">
-          <div class="fs-card-label">总出账</div>
+          <div class="fs-card-label">总出账(¥)</div>
           <div class="fs-card-val expense">¥{{ fmtNum(statsData.totalOut) }}</div>
         </div>
         <div class="fs-card">
-          <div class="fs-card-label">总盈利</div>
+          <div class="fs-card-label">总盈利(¥)</div>
           <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(statsData.totalProfit) }}</div>
         </div>
-        <div class="fs-card">
-          <div class="fs-card-label">总记录数</div>
-          <div class="fs-card-val neutral">{{ statsData.totalCount }}</div>
+      </div>
+
+      <div class="fs-section">
+        <div class="fs-section-title">按货币统计</div>
+        <div class="fs-currency-grid">
+          <div v-for="cs in statsData.byCurrency" :key="cs.currency" class="fs-currency-card">
+            <div class="fs-cur-header">
+              <Tag :value="cs.currency" severity="info" />
+            </div>
+            <div class="fs-cur-row">
+              <span class="fs-cur-label">原币进</span>
+              <span class="fs-cur-val income">{{ currencySymbol(cs.currency) }}{{ fmtNum(cs.inAmount) }}</span>
+            </div>
+            <div class="fs-cur-row">
+              <span class="fs-cur-label">原币出</span>
+              <span class="fs-cur-val expense">{{ currencySymbol(cs.currency) }}{{ fmtNum(cs.outAmount) }}</span>
+            </div>
+            <div class="fs-cur-divider"></div>
+            <div class="fs-cur-row">
+              <span class="fs-cur-label">折合进(¥)</span>
+              <span class="fs-cur-val income">¥{{ fmtNum(cs.inRmb) }}</span>
+            </div>
+            <div class="fs-cur-row">
+              <span class="fs-cur-label">折合出(¥)</span>
+              <span class="fs-cur-val expense">¥{{ fmtNum(cs.outRmb) }}</span>
+            </div>
+            <div class="fs-cur-row">
+              <span class="fs-cur-label">盈利(¥)</span>
+              <span class="fs-cur-val" :class="cs.profit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(cs.profit) }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -115,7 +151,7 @@
     </div>
 
     <!-- Manage View -->
-    <template v-if="topTab === 'manage'">
+    <div v-if="topTab === 'manage'" class="manage-view">
     <!-- Toolbar -->
     <div class="toolbar">
       <span class="view-title">资金管理</span>
@@ -139,6 +175,7 @@
           @contextmenu.prevent="onGroupCtx($event, g)"
         >
           <span>{{ g.name }}</span>
+          <span v-if="groupPendingCount(g.id)" class="tab-badge">{{ groupPendingCount(g.id) }}</span>
           <i class="pi pi-times tab-close" @click.stop="deleteGroup(g.id)"></i>
         </div>
         <div class="tab-add" @click="showAddGroup = true"><i class="pi pi-plus"></i></div>
@@ -146,45 +183,6 @@
     </div>
 
     <!-- Filter Bar -->
-    <div class="filter-bar">
-      <div class="filter-item">
-        <label>入账时间</label>
-        <DatePicker v-model="filterRecordRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择日期范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
-          <template #buttonbar="{ clearCallback }">
-            <div class="dp-btnbar">
-              <Button size="small" label="今天" severity="secondary" @click="filterRecordRange = daysRange(0)" />
-              <Button size="small" label="近3天" severity="secondary" @click="filterRecordRange = daysRange(3)" />
-              <Button size="small" label="近7天" severity="secondary" @click="filterRecordRange = daysRange(7)" />
-              <Button size="small" label="近30天" severity="secondary" @click="filterRecordRange = daysRange(30)" />
-              <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback" />
-            </div>
-          </template>
-        </DatePicker>
-      </div>
-      <div class="filter-item">
-        <label>出账时间</label>
-        <DatePicker v-model="filterOutRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="选择日期范围" showIcon showButtonBar appendTo="body" class="filter-date-range">
-          <template #buttonbar="{ clearCallback }">
-            <div class="dp-btnbar">
-              <Button size="small" label="今天" severity="secondary" @click="filterOutRange = daysRange(0)" />
-              <Button size="small" label="近3天" severity="secondary" @click="filterOutRange = daysRange(3)" />
-              <Button size="small" label="近7天" severity="secondary" @click="filterOutRange = daysRange(7)" />
-              <Button size="small" label="近30天" severity="secondary" @click="filterOutRange = daysRange(30)" />
-              <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback" />
-            </div>
-          </template>
-        </DatePicker>
-      </div>
-      <div class="filter-item">
-        <label>状态</label>
-        <Select v-model="filterStatus" :options="statusOptions" placeholder="全部" showClear class="filter-select" />
-      </div>
-      <div class="filter-item">
-        <label>出货商</label>
-        <InputText v-model="filterOutTo" placeholder="搜索..." class="filter-text" />
-      </div>
-      <Button v-if="hasActiveFilter" label="清除筛选" icon="pi pi-filter-slash" text size="small" @click="clearFilters" />
-    </div>
 
     <!-- Batch Actions Bar -->
     <div v-if="selectedFunds.length" class="batch-bar">
@@ -203,68 +201,95 @@
       <DataTable
         :value="filteredFunds"
         v-model:selection="selectedFunds"
+        v-model:filters="dtFilters"
         dataKey="id"
         stripedRows
         scrollable
         scrollHeight="flex"
         paginator
-        :rows="50"
-        :rowsPerPageOptions="[20, 50, 100, 200]"
-        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+        :rows="pageRows"
+        :rowsPerPageOptions="[20, 50, 100, 200, 500, 1000]"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
         currentPageReportTemplate="共 {totalRecords} 条，第 {first}-{last} 条"
+        :virtualScrollerOptions="filteredFunds.length > 200 ? { itemSize: 46 } : undefined"
+        filterDisplay="row"
+        :globalFilterFields="['card_no', 'out_to', 'record_date']"
         contextMenu
         v-model:contextMenuSelection="ctxRow"
         @rowContextmenu="onRowCtx"
         :loading="loading"
         class="funds-table"
       >
-        <Column selectionMode="multiple" style="width:48px" />
-        <Column field="record_date" header="日期" style="min-width:110px">
+        <Column selectionMode="multiple" style="width:28px" />
+        <Column field="record_date" header="日期" :showFilterMenu="false" style="min-width:100px">
           <template #body="{data}">
             <span v-if="data.record_date" class="record-date">{{ data.record_date }}</span>
             <span v-else class="no-data">-</span>
           </template>
+          <template #filter="{ filterModel, filterCallback }">
+            <DatePicker v-model="filterDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="日期范围" showIcon showButtonBar appendTo="body" class="dt-filter-date" @update:modelValue="filterCallback()">
+              <template #buttonbar="{ clearCallback }">
+                <div class="dp-btnbar">
+                  <Button size="small" label="今天" severity="secondary" @click="filterDateRange = daysRange(0); filterCallback()" />
+                  <Button size="small" label="近3天" severity="secondary" @click="filterDateRange = daysRange(3); filterCallback()" />
+                  <Button size="small" label="近7天" severity="secondary" @click="filterDateRange = daysRange(7); filterCallback()" />
+                  <Button size="small" label="近30天" severity="secondary" @click="filterDateRange = daysRange(30); filterCallback()" />
+                  <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterDateRange = null; filterCallback()" />
+                </div>
+              </template>
+            </DatePicker>
+          </template>
         </Column>
-        <Column header="卡片信息" style="min-width:240px">
+        <Column field="currency" header="货币" :showFilterMenu="false" style="min-width:20px">
+          <template #body="{data}">
+            <Tag :value="data.currency || 'USD'" severity="info" />
+          </template>
+          <template #filter="{ filterModel, filterCallback }">
+            <Select v-model="filterModel.value" @change="filterCallback()" :options="currencyFilterOptions" placeholder="全部" :showClear="true" class="dt-filter-select" />
+          </template>
+        </Column>
+        <Column field="card_no" header="卡片信息" :showFilterMenu="false" style="min-width:240px">
           <template #body="{data}">
             <span class="card-inline">{{ data.card_no }} {{ data.card_date }} {{ data.cvv }}</span>
           </template>
+          <template #filter="{ filterModel, filterCallback }">
+            <InputText v-model="filterModel.value" type="text" @input="filterCallback()" placeholder="搜索卡号" class="dt-filter-input" />
+          </template>
         </Column>
-        <Column v-if="activeGroup === null" header="分组" style="min-width:90px">
+        <Column v-if="activeGroup === null" header="分组" style="min-width:70px">
           <template #body="{data}">
             <Tag v-if="groupName(data.group_id)" :value="groupName(data.group_id)" severity="secondary" />
             <span v-else class="no-data">-</span>
           </template>
         </Column>
-        <Column field="status" header="状态" style="min-width:80px">
+        <Column field="status" header="状态" :showFilterMenu="false" style="min-width:90px">
           <template #body="{data}">
-            <Tag :severity="data.status === '盈利' ? 'success' : data.status === '亏损' ? 'danger' : 'warning'" :value="data.status" />
+            <span class="status-tag" :class="statusClass(data.status)">{{ data.status }}</span>
+          </template>
+          <template #filter="{ filterModel, filterCallback }">
+            <Select v-model="filterModel.value" @change="filterCallback()" :options="statusOptions" placeholder="全部" :showClear="true" class="dt-filter-select" />
           </template>
         </Column>
-        <Column header="进账" style="min-width:150px">
+        <Column header="进账" style="min-width:90px">
           <template #body="{data}">
             <div class="amount-cell">
-              <span class="amount-val income">¥{{ fmtNum(data.in_amount) }}</span>
+              <span class="amount-val income">{{ currencySymbol(data.currency) }}{{ fmtNum(data.in_amount) }}</span>
               <span class="amount-rate">× {{ data.in_rate }}</span>
               <span class="amount-total">= ¥{{ fmtNum(data.in_amount * data.in_rate) }}</span>
             </div>
           </template>
         </Column>
-        <Column header="出账" style="min-width:180px">
+        <Column header="出账" style="min-width:90px">
           <template #body="{data}">
             <div v-if="data.out_amount" class="amount-cell">
-              <span class="amount-val expense">¥{{ fmtNum(data.out_amount) }}</span>
+              <span class="amount-val expense">{{ currencySymbol(data.currency) }}{{ fmtNum(data.out_amount) }}</span>
               <span class="amount-rate">× {{ data.out_rate }}</span>
               <span class="amount-total">= ¥{{ fmtNum(data.out_amount * data.out_rate) }}</span>
-              <span v-if="data.out_date || data.out_to" class="out-meta">
-                <span v-if="data.out_date" class="out-date">{{ data.out_date }}</span>
-                <span v-if="data.out_to" class="out-to">→ {{ data.out_to }}</span>
-              </span>
             </div>
             <span v-else class="no-data">未出账</span>
           </template>
         </Column>
-        <Column header="盈利" style="min-width:120px">
+        <Column header="盈利" style="min-width:70px">
           <template #body="{data}">
             <div v-if="data.out_amount" class="profit-cell" :class="profit(data) >= 0 ? 'profit-pos' : 'profit-neg'">
               <i :class="profit(data) >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down'" style="font-size:11px"></i>
@@ -273,36 +298,80 @@
             <span v-else class="no-data">-</span>
           </template>
         </Column>
+        <Column field="out_to" header="出货信息" :showFilterMenu="false" style="min-width:120px">
+          <template #body="{data}">
+            <div v-if="data.out_date || data.out_to" class="out-info-cell">
+              <span v-if="data.out_date" class="record-date">{{ data.out_date }}</span>
+              <span v-if="data.out_to" class="out-to-cell">{{ data.out_to }}</span>
+            </div>
+            <span v-else class="no-data">-</span>
+          </template>
+          <template #filter="{ filterModel, filterCallback }">
+            <div class="out-filter-group">
+              <DatePicker v-model="filterOutDateRange" selectionMode="range" :manualInput="false" dateFormat="yy-mm-dd" placeholder="出账日期" showIcon showButtonBar appendTo="body" class="dt-filter-date" @update:modelValue="filterCallback()">
+                <template #buttonbar="{ clearCallback }">
+                  <div class="dp-btnbar">
+                    <Button size="small" label="今天" severity="secondary" @click="filterOutDateRange = daysRange(0); filterCallback()" />
+                    <Button size="small" label="近7天" severity="secondary" @click="filterOutDateRange = daysRange(7); filterCallback()" />
+                    <Button size="small" label="近30天" severity="secondary" @click="filterOutDateRange = daysRange(30); filterCallback()" />
+                    <Button size="small" icon="pi pi-times" severity="danger" variant="outlined" @click="clearCallback; filterOutDateRange = null; filterCallback()" />
+                  </div>
+                </template>
+              </DatePicker>
+              <InputText v-model="filterModel.value" type="text" @input="filterCallback()" placeholder="搜索出货商" class="dt-filter-input" />
+            </div>
+          </template>
+        </Column>
         <Column style="width:56px">
           <template #body="{data}">
             <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteFund(data.id)" />
           </template>
         </Column>
+        <template #paginatorstart>
+          <div class="page-size-input">
+            <span>每页</span>
+            <input
+              type="number"
+              :value="pageRows"
+              @change="e => { let v = parseInt(e.target.value) || 50; v = Math.max(10, Math.min(5000, v)); pageRows = v; e.target.value = v; }"
+              class="page-size-native"
+              min="10" max="5000" step="10"
+            />
+            <span>条</span>
+          </div>
+        </template>
         <template #empty>
           <div class="empty-tip"><i class="pi pi-inbox"></i><p>暂无数据，点击添加</p></div>
         </template>
       </DataTable>
-      <div v-if="filteredFunds.length" class="stats-bar">
-        <div class="stat-item">
-          <span class="stat-label">总进账</span>
-          <span class="stat-val income">¥{{ fmtNum(totalIn) }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">总出账</span>
-          <span class="stat-val expense">¥{{ fmtNum(totalOut) }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">总盈利</span>
-          <span class="stat-val" :class="totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(totalProfit) }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">待出账</span>
-          <span class="stat-val">{{ pendingCount }} 条</span>
-        </div>
+    </div>
+    <div v-if="filteredFunds.length && activeGroup !== null" class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">待出账</span>
+        <span class="stat-val">{{ pendingCount }} 条</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div v-for="cs in currencyStats" :key="cs.currency" class="stat-currency-group">
+        <span class="stat-currency-tag">{{ cs.currency }}</span>
+        <span class="stat-val income">进 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.inAmount) }}</span>
+        <span class="stat-val expense">出 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.outAmount) }}</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">总进账(¥)</span>
+        <span class="stat-val income">¥{{ fmtNum(totalIn) }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">总出账(¥)</span>
+        <span class="stat-val expense">¥{{ fmtNum(totalOut) }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">总盈利(¥)</span>
+        <span class="stat-val" :class="totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(totalProfit) }}</span>
       </div>
     </div>
 
-    </template>
+    </div>
 
     <!-- Right-click menu -->
     <ContextMenu ref="ctxMenu" :model="ctxItems" />
@@ -322,6 +391,10 @@
               </div>
             </template>
           </DatePicker>
+        </div>
+        <div class="form-field">
+          <label>货币类型</label>
+          <Select v-model="form.currency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <Divider />
         <div class="form-hint">快速输入格式：<code>卡号 日期 CVV [状态] 进账金额*进账汇率</code></div>
@@ -440,6 +513,10 @@
             </template>
           </DatePicker>
         </div>
+        <div class="form-field" style="margin-bottom:8px">
+          <label>货币类型</label>
+          <Select v-model="batchCurrency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
+        </div>
         <div class="form-hint">每行一条记录，格式：<code>卡号 日期 CVV [状态] 进账金额*进账汇率</code></div>
         <div class="form-hint-eg">例：5214160092182610 04/30 188 完成 600*5.95</div>
         <Textarea v-model="batchInput" rows="8" placeholder="粘贴多行数据..." class="w-full" @input="parseBatch" autoResize />
@@ -471,8 +548,8 @@
         <div class="export-hint" v-if="selectedFunds.length">
           将导出已选中的 <strong>{{ selectedFunds.length }}</strong> 条记录
         </div>
-        <div class="export-hint" v-else>
-          将导出当前列表的 <strong>{{ filteredFunds.length }}</strong> 条记录（可先勾选要导出的记录）
+        <div class="export-hint" v-else style="color:var(--mac-red)">
+          <i class="pi pi-exclamation-triangle"></i> 请先在列表中勾选要导出的记录
         </div>
         <div class="form-field" style="margin-top:14px">
           <label>导出字段</label>
@@ -529,15 +606,25 @@ import ContextMenu from 'primevue/contextmenu'
 import Checkbox from 'primevue/checkbox'
 import DatePicker from 'primevue/datepicker'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+import { FilterMatchMode } from '@primevue/core/api'
 import * as XLSX from 'xlsx'
 
 const toast = useToast()
+const confirm = useConfirm()
 
 const topTab = ref('manage')
 
 function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d }
 function daysRange(n) { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - n); return [start, end] }
-function emptyForm() { return { group_id: null, card_no: '', card_date: '', cvv: '', status: '待出账', in_amount: 0, in_rate: 1, out_amount: 0, out_rate: 1, record_date: new Date() } }
+function emptyForm() { return { group_id: null, card_no: '', card_date: '', cvv: '', status: '待出账', in_amount: 0, in_rate: 1, out_amount: 0, out_rate: 1, record_date: new Date(), currency: 'USD' } }
+
+const currencyOptions = [
+  { label: '🇺🇸 美元 (USD)', value: 'USD' },
+  { label: '🇪🇺 欧元 (EUR)', value: 'EUR' },
+  { label: '🇦🇺 澳元 (AUD)', value: 'AUD' },
+  { label: '🇨🇦 加元 (CAD)', value: 'CAD' },
+]
 
 const funds = ref([])
 const allFunds = ref([])
@@ -556,61 +643,40 @@ const renameGroupId = ref(null)
 const batchInput = ref('')
 const batchRows = ref([])
 const batchDate = ref(new Date())
+const batchCurrency = ref('USD')
 const ctxRow = ref(null)
 const ctxMenu = ref(null)
 const groupCtxMenu = ref(null)
 const ctxGroup = ref(null)
 const selectedFunds = ref([])
+const pageRows = ref(50)
 const showBatchEdit = ref(false)
 const batchEditForm = ref({ out_amount: 0, out_rate: 1, out_date: new Date(), out_to: '' })
 
-const filterRecordRange = ref(null)
-const filterOutRange = ref(null)
-const filterStatus = ref(null)
-const filterOutTo = ref('')
+const currencyFilterOptions = ['USD', 'EUR', 'AUD', 'CAD']
 const statusOptions = ['待出账', '盈利', '亏损']
 
-const hasActiveFilter = computed(() =>
-  filterRecordRange.value || filterOutRange.value || filterStatus.value || filterOutTo.value
-)
+const dtFilters = ref({
+  currency: { value: null, matchMode: FilterMatchMode.EQUALS },
+  card_no: { value: null, matchMode: FilterMatchMode.CONTAINS },
+  status: { value: null, matchMode: FilterMatchMode.EQUALS },
+  out_to: { value: null, matchMode: FilterMatchMode.CONTAINS },
+})
 
-function clearFilters() {
-  filterRecordRange.value = null
-  filterOutRange.value = null
-  filterStatus.value = null
-  filterOutTo.value = ''
-}
+const filterDateRange = ref(null)
+const filterOutDateRange = ref(null)
 
 const filteredFunds = computed(() => {
   let list = funds.value
-  if (filterStatus.value) {
-    list = list.filter(f => f.status === filterStatus.value)
+  if (filterDateRange.value) {
+    const [start, end] = filterDateRange.value
+    if (start) { const s = fmtDate(start); list = list.filter(f => (f.record_date || '') >= s) }
+    if (end) { const e = fmtDate(end); list = list.filter(f => (f.record_date || '') <= e) }
   }
-  if (filterRecordRange.value) {
-    const [start, end] = filterRecordRange.value
-    if (start) {
-      const s = fmtDate(start)
-      list = list.filter(f => (f.record_date || '') >= s)
-    }
-    if (end) {
-      const e = fmtDate(end)
-      list = list.filter(f => (f.record_date || '') <= e)
-    }
-  }
-  if (filterOutRange.value) {
-    const [start, end] = filterOutRange.value
-    if (start) {
-      const s = fmtDate(start)
-      list = list.filter(f => (f.out_date || '') >= s)
-    }
-    if (end) {
-      const e = fmtDate(end)
-      list = list.filter(f => (f.out_date || '') <= e)
-    }
-  }
-  if (filterOutTo.value) {
-    const kw = filterOutTo.value.toLowerCase()
-    list = list.filter(f => (f.out_to || '').toLowerCase().includes(kw))
+  if (filterOutDateRange.value) {
+    const [start, end] = filterOutDateRange.value
+    if (start) { const s = fmtDate(start); list = list.filter(f => (f.out_date || '') >= s) }
+    if (end) { const e = fmtDate(end); list = list.filter(f => (f.out_date || '') <= e) }
   }
   return list
 })
@@ -620,16 +686,51 @@ const totalOut = computed(() => filteredFunds.value.reduce((s, f) => s + (f.out_
 const totalProfit = computed(() => totalOut.value - totalIn.value)
 const pendingCount = computed(() => filteredFunds.value.filter(f => f.status === '待出账').length)
 
+const groupPendingMap = computed(() => {
+  const map = {}
+  for (const f of allFunds.value) {
+    if (f.status === '待出账') {
+      const gid = f.group_id
+      map[gid] = (map[gid] || 0) + 1
+    }
+  }
+  return map
+})
+
+function groupPendingCount(groupId) {
+  return groupPendingMap.value[groupId] || 0
+}
+
+const allCurrencies = ['USD', 'EUR', 'AUD', 'CAD']
+
+const currencyStats = computed(() => {
+  const map = {}
+  for (const cur of allCurrencies) {
+    map[cur] = { currency: cur, inAmount: 0, inTotal: 0, outAmount: 0, outTotal: 0, profit: 0 }
+  }
+  for (const f of filteredFunds.value) {
+    const cur = f.currency || 'USD'
+    if (!map[cur]) map[cur] = { currency: cur, inAmount: 0, inTotal: 0, outAmount: 0, outTotal: 0, profit: 0 }
+    map[cur].inAmount += f.in_amount || 0
+    map[cur].inTotal += f.in_amount * f.in_rate
+    map[cur].outAmount += f.out_amount || 0
+    map[cur].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
+    map[cur].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+  }
+  return allCurrencies.map(cur => map[cur])
+})
+
 // Stats filters
 const statsRecordRange = ref(null)
 const statsOutRange = ref(null)
 const statsGroup = ref(null)
 const statsStatus = ref(null)
+const statsCurrency = ref(null)
 const statsOutTo = ref('')
 const statsGroupOptions = computed(() => groups.value)
 
 const hasStatsFilter = computed(() =>
-  statsRecordRange.value || statsOutRange.value || statsGroup.value !== null || statsStatus.value || statsOutTo.value
+  statsRecordRange.value || statsOutRange.value || statsGroup.value !== null || statsStatus.value || statsCurrency.value || statsOutTo.value
 )
 
 function clearStatsFilters() {
@@ -637,6 +738,7 @@ function clearStatsFilters() {
   statsOutRange.value = null
   statsGroup.value = null
   statsStatus.value = null
+  statsCurrency.value = null
   statsOutTo.value = ''
 }
 
@@ -647,6 +749,9 @@ const statsFilteredFunds = computed(() => {
   }
   if (statsStatus.value) {
     list = list.filter(f => f.status === statsStatus.value)
+  }
+  if (statsCurrency.value) {
+    list = list.filter(f => (f.currency || 'USD') === statsCurrency.value)
   }
   if (statsRecordRange.value) {
     const [start, end] = statsRecordRange.value
@@ -669,6 +774,21 @@ const statsData = computed(() => {
   const all = statsFilteredFunds.value
   const tIn = all.reduce((s, f) => s + f.in_amount * f.in_rate, 0)
   const tOut = all.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0)
+
+  const curMap = {}
+  for (const cur of allCurrencies) {
+    curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+  }
+  for (const f of all) {
+    const cur = f.currency || 'USD'
+    if (!curMap[cur]) curMap[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+    curMap[cur].inAmount += f.in_amount
+    curMap[cur].outAmount += (f.out_amount || 0)
+    curMap[cur].inRmb += f.in_amount * f.in_rate
+    curMap[cur].outRmb += (f.out_amount || 0) * (f.out_rate || 1)
+    curMap[cur].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+  }
+  const byCurrency = allCurrencies.map(cur => curMap[cur])
 
   const statusMap = {}
   for (const f of all) {
@@ -702,7 +822,7 @@ const statsData = computed(() => {
   }
   const byOutTo = Object.values(outToMap).sort((a, b) => b.outTotal - a.outTotal)
 
-  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byStatus, byGroup, byOutTo }
+  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency, byStatus, byGroup, byOutTo }
 })
 
 const form = ref(emptyForm())
@@ -712,6 +832,7 @@ const editId = ref(null)
 
 const exportFields = ref([
   { key: 'record_date', label: '记录日期', checked: true },
+  { key: 'currency', label: '货币', checked: true },
   { key: 'group', label: '分组', checked: true },
   { key: 'card_no', label: '卡号', checked: true },
   { key: 'card_date', label: '卡片日期', checked: true },
@@ -759,6 +880,8 @@ async function loadAllFunds() {
 watch(topTab, (val) => {
   if (val === 'stats') loadAllFunds()
 })
+
+async function refreshAllFunds() { if (window.api) allFunds.value = await window.api.getAllFunds() }
 
 async function loadGroups() {
   groups.value = window.api ? await window.api.getAllFundGroups() : []
@@ -819,6 +942,15 @@ function fmtNum(val) {
   return Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+const currencySymbolMap = { USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' }
+function currencySymbol(cur) { return currencySymbolMap[cur] || '$' }
+
+function statusClass(status) {
+  if (status === '盈利') return 'status-profit'
+  if (status === '亏损') return 'status-loss'
+  return 'status-pending'
+}
+
 function groupName(gid) {
   if (!gid) return ''
   const g = groups.value.find(g => g.id === gid)
@@ -845,6 +977,7 @@ function openBatch() {
   batchInput.value = ''
   batchRows.value = []
   batchDate.value = new Date()
+  batchCurrency.value = 'USD'
   showBatch.value = true
 }
 
@@ -874,13 +1007,15 @@ async function submitBatch() {
   if (!window.api || !batchRows.value.length) return
   const count = batchRows.value.length
   const rd = batchDate.value ? fmtDate(batchDate.value) : ''
-  const plain = JSON.parse(JSON.stringify(batchRows.value)).map(r => ({ ...r, group_id: activeGroup.value, record_date: rd }))
+  const cur = batchCurrency.value || 'USD'
+  const plain = JSON.parse(JSON.stringify(batchRows.value)).map(r => ({ ...r, group_id: activeGroup.value, record_date: rd, currency: cur }))
   await window.api.addFundsBatch(plain)
   await load()
   showBatch.value = false
   batchInput.value = ''
   batchRows.value = []
   toast.add({ severity: 'success', summary: `已导入 ${count} 条记录`, life: 2000 })
+  refreshAllFunds()
 }
 
 function parseQuick() {
@@ -909,12 +1044,14 @@ async function submitAdd() {
     out_amount: Number(form.value.out_amount) || 0,
     out_rate: Number(form.value.out_rate) || 1,
     record_date: form.value.record_date ? fmtDate(form.value.record_date) : '',
+    currency: form.value.currency || 'USD',
   })
   funds.value.unshift(saved)
   form.value = emptyForm()
   quickInput.value = ''
   showAdd.value = false
   toast.add({ severity: 'success', summary: '已添加', life: 2000 })
+  refreshAllFunds()
 }
 
 async function submitEdit() {
@@ -936,14 +1073,26 @@ async function submitEdit() {
   if (idx !== -1) funds.value[idx] = updated
   showEdit.value = false
   toast.add({ severity: 'success', summary: '已更新', life: 2000 })
+  refreshAllFunds()
 }
 
-async function deleteFund(id) {
-  if (!window.api) return
-  await window.api.deleteFund(id)
-  funds.value = funds.value.filter(f => f.id !== id)
-  selectedFunds.value = selectedFunds.value.filter(f => f.id !== id)
-  toast.add({ severity: 'info', summary: '已删除', life: 2000 })
+function deleteFund(id) {
+  confirm.require({
+    message: '确定要删除这条记录吗？',
+    header: '确认删除',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '删除',
+    rejectLabel: '取消',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      if (!window.api) return
+      await window.api.deleteFund(id)
+      funds.value = funds.value.filter(f => f.id !== id)
+      selectedFunds.value = selectedFunds.value.filter(f => f.id !== id)
+      toast.add({ severity: 'info', summary: '已删除', life: 2000 })
+      refreshAllFunds()
+    }
+  })
 }
 
 function openBatchEdit() {
@@ -971,23 +1120,36 @@ async function submitBatchEdit() {
   showBatchEdit.value = false
   selectedFunds.value = []
   toast.add({ severity: 'success', summary: `已更新 ${count} 条出账记录`, life: 2000 })
+  refreshAllFunds()
 }
 
-async function batchDelete() {
-  if (!window.api || !selectedFunds.value.length) return
+function batchDelete() {
+  if (!selectedFunds.value.length) return
   const count = selectedFunds.value.length
-  for (const f of selectedFunds.value) {
-    await window.api.deleteFund(f.id)
-  }
-  const ids = new Set(selectedFunds.value.map(f => f.id))
-  funds.value = funds.value.filter(f => !ids.has(f.id))
-  selectedFunds.value = []
-  toast.add({ severity: 'info', summary: `已删除 ${count} 条记录`, life: 2000 })
+  confirm.require({
+    message: `确定要删除选中的 ${count} 条记录吗？此操作不可恢复。`,
+    header: '确认批量删除',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '全部删除',
+    rejectLabel: '取消',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      if (!window.api) return
+      for (const f of selectedFunds.value) {
+        await window.api.deleteFund(f.id)
+      }
+      const ids = new Set(selectedFunds.value.map(f => f.id))
+      funds.value = funds.value.filter(f => !ids.has(f.id))
+      selectedFunds.value = []
+      toast.add({ severity: 'info', summary: `已删除 ${count} 条记录`, life: 2000 })
+      refreshAllFunds()
+    }
+  })
 }
 
 function doExport() {
-  const data = selectedFunds.value.length ? selectedFunds.value : filteredFunds.value
-  if (!data.length) { toast.add({ severity: 'warn', summary: '没有可导出的数据', life: 2000 }); return }
+  if (!selectedFunds.value.length) { toast.add({ severity: 'warn', summary: '请先选中要导出的记录', life: 2000 }); return }
+  const data = selectedFunds.value
 
   const fields = exportFields.value.filter(f => f.checked)
   const rows = data.map(row => {
@@ -1019,6 +1181,16 @@ function doExport() {
   })
   ws['!cols'] = colWidths
 
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+  const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' } }
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c })
+      if (!ws[addr]) ws[addr] = { v: '' }
+      ws[addr].s = centerStyle
+    }
+  }
+
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '资金记录')
   XLSX.writeFile(wb, `资金记录_${new Date().toISOString().slice(0,10)}.xlsx`)
@@ -1035,6 +1207,7 @@ function fmtDate(d) {
 
 <style scoped>
 .funds-view { display: flex; flex-direction: column; height: 100%; background: var(--mac-bg); }
+.manage-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 
 .top-tabs {
   display: flex; gap: 2px;
@@ -1042,6 +1215,7 @@ function fmtDate(d) {
   border-bottom: 1px solid var(--mac-border);
   background: rgba(255,255,255,0.5);
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 .top-tab {
   display: flex; align-items: center; gap: 6px;
@@ -1077,6 +1251,19 @@ function fmtDate(d) {
 .fs-card-val.expense { color: #ff9500; }
 .fs-card-val.neutral { color: var(--mac-text); }
 
+.fs-currency-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fs-currency-card {
+  background: var(--mac-surface); border-radius: 12px; padding: 14px;
+  box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 6px;
+}
+.fs-cur-header { display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+.fs-cur-row { display: flex; justify-content: space-between; align-items: center; }
+.fs-cur-label { font-size: 12px; color: var(--mac-text-secondary); }
+.fs-cur-val { font-size: 13px; font-weight: 600; }
+.fs-cur-val.income { color: #34c759; }
+.fs-cur-val.expense { color: #ff9500; }
+.fs-cur-divider { height: 1px; background: var(--mac-border); margin: 2px 0; }
+
 .fs-section { display: flex; flex-direction: column; gap: 10px; }
 .fs-section-title { font-size: 14px; font-weight: 600; color: var(--mac-text); }
 
@@ -1103,20 +1290,45 @@ function fmtDate(d) {
 
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--mac-border);
   background: rgba(255,255,255,0.6);
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 .view-title { font-size: 15px; font-weight: 600; color: var(--mac-text); }
-.toolbar-actions { display: flex; gap: 8px; }
+.toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-input { display: inline-flex; align-items: center; gap: 4px; }
+.page-size-input span { font-size: 12px; color: var(--mac-text-secondary); white-space: nowrap; }
+.page-size-native {
+  width: 48px; height: 24px; border: 1px solid var(--mac-border, #d1d5db);
+  border-radius: 6px; text-align: center; font-size: 12px; background: var(--mac-surface, #fff);
+  color: var(--mac-text); outline: none; appearance: textfield; -moz-appearance: textfield;
+}
+.page-size-native::-webkit-inner-spin-button,
+.page-size-native::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.page-size-native:focus { border-color: var(--mac-accent, #007aff); box-shadow: 0 0 0 2px rgba(0,122,255,0.15); }
+:deep(.p-paginator) { flex-wrap: nowrap; gap: 2px; padding: 4px 8px; font-size: 12px; }
+:deep(.p-paginator .p-paginator-element) { min-width: 28px; height: 28px; }
+:deep(.p-paginator .p-paginator-current) { font-size: 12px; white-space: nowrap; }
 
 .group-tabs {
   border-bottom: 1px solid var(--mac-border);
   background: rgba(255,255,255,0.4);
   padding: 0 12px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.tab-list { display: flex; align-items: center; gap: 2px; overflow-x: auto; }
+.tab-list {
+  display: flex; align-items: center; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.15) transparent;
+}
+.tab-list::-webkit-scrollbar { height: 3px; }
+.tab-list::-webkit-scrollbar-track { background: transparent; }
+.tab-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+.tab-list::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
 .tab-item {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 14px; font-size: 13px; cursor: pointer;
@@ -1126,6 +1338,14 @@ function fmtDate(d) {
 }
 .tab-item:hover { color: var(--mac-text); }
 .tab-item.active { color: var(--mac-accent, #007aff); border-bottom-color: var(--mac-accent, #007aff); font-weight: 500; }
+.tab-badge {
+  font-size: 10px; font-weight: 700;
+  background: #ff9500; color: #fff;
+  min-width: 16px; height: 16px;
+  border-radius: 8px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
 .tab-close { font-size: 10px; opacity: 0; transition: opacity 0.15s; padding: 2px; border-radius: 3px; }
 .tab-item:hover .tab-close { opacity: 0.5; }
 .tab-close:hover { opacity: 1 !important; color: #ff3b30; }
@@ -1151,18 +1371,35 @@ function fmtDate(d) {
   padding: 8px 16px;
   background: rgba(0,122,255,0.06);
   border-bottom: 1px solid var(--mac-border);
+  flex-shrink: 0;
 }
 .batch-info { font-size: 13px; font-weight: 600; color: var(--mac-accent, #007aff); }
 .batch-edit-hint { font-size: 13px; color: var(--mac-text-secondary); padding: 4px 0 8px; }
 .batch-edit-note { font-size: 12px; color: var(--mac-text-secondary); font-style: italic; margin-top: 4px; }
-.table-wrap { flex: 1; overflow: hidden; padding: 16px; position: relative; display: flex; flex-direction: column; }
+.table-wrap { flex: 1; overflow: hidden; padding: 8px 12px; position: relative; display: flex; flex-direction: column; min-height: 0; }
+:deep(.funds-table) { display: flex; flex-direction: column; height: 100%; }
+:deep(.funds-table .p-datatable-wrapper) { flex: 1; min-height: 0; overflow: auto; }
+:deep(.funds-table .p-paginator-bottom) { flex-shrink: 0; border-top: 1px solid var(--mac-border); }
 .stats-bar {
-  display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   padding: 10px 16px;
   border-top: 1px solid var(--mac-border);
-  background: rgba(255,255,255,0.5);
-  border-radius: 0 0 8px 8px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
+.stat-divider { width: 1px; height: 24px; background: var(--mac-border); flex-shrink: 0; }
+.stat-currency-group {
+  display: flex; align-items: center; gap: 12px;
+  padding: 2px 10px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 8px;
+}
+.stat-currency-tag {
+  font-size: 11px; font-weight: 700; color: var(--mac-accent, #007aff);
+  background: rgba(0,122,255,0.1); padding: 2px 6px; border-radius: 4px;
+}
+.stat-cny { font-size: 11px; color: var(--mac-text-secondary); font-weight: 400; }
 .stat-item { display: flex; align-items: center; gap: 6px; }
 .stat-label { font-size: 12px; color: var(--mac-text-secondary); font-weight: 500; }
 .stat-val { font-size: 14px; font-weight: 700; }
@@ -1186,6 +1423,8 @@ function fmtDate(d) {
 .out-meta { display: flex; gap: 6px; font-size: 11px; color: var(--mac-text-secondary); margin-top: 2px; }
 .out-date { font-family: 'SF Mono', 'Fira Mono', monospace; }
 .out-to { color: var(--mac-accent, #007aff); }
+.out-to-cell { font-size: 13px; color: var(--mac-accent, #007aff); font-weight: 500; }
+.out-info-cell { display: flex; flex-direction: column; gap: 2px; }
 
 .profit-cell { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px; }
 .profit-pos { color: #34c759; background: rgba(52,199,89,0.1); }
@@ -1193,6 +1432,19 @@ function fmtDate(d) {
 
 .record-date { font-size: 13px; color: var(--mac-text); font-family: 'SF Mono', 'Fira Mono', monospace; }
 .dp-btnbar { display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.status-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 600; text-align: center;
+}
+.status-pending { background: #fff3cd; color: #856404; }
+.status-profit { background: #d4edda; color: #155724; }
+.status-loss { background: #f8d7da; color: #721c24; }
+
+.dt-filter-input { width: 100%; font-size: 12px; }
+.dt-filter-select { width: 100%; font-size: 12px; }
+.dt-filter-date { width: 100%; font-size: 12px; }
+.out-filter-group { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+
 .no-data { font-size: 12px; color: var(--mac-text-secondary); }
 
 .empty-tip { text-align: center; padding: 40px; color: var(--mac-text-secondary); }

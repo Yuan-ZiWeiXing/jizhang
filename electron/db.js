@@ -63,6 +63,7 @@ export function createDb(userDataPath) {
       record_date TEXT DEFAULT '',
       out_date TEXT DEFAULT '',
       out_to TEXT DEFAULT '',
+      currency TEXT DEFAULT 'USD',
       created_at TEXT DEFAULT (datetime('now'))
     );
   `)
@@ -73,6 +74,7 @@ export function createDb(userDataPath) {
   try { db.exec("ALTER TABLE funds ADD COLUMN record_date TEXT DEFAULT ''") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN out_date TEXT DEFAULT ''") } catch(e) {}
   try { db.exec("ALTER TABLE funds ADD COLUMN out_to TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN currency TEXT DEFAULT 'USD'") } catch(e) {}
 
 
   // Seed categories if empty
@@ -120,9 +122,9 @@ export function createDb(userDataPath) {
     getFundsByDateRange(startDate, endDate) {
       return db.prepare('SELECT * FROM funds WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC').all(startDate, endDate + ' 23:59:59')
     },
-    addFund({ group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date }) {
-      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      const result = stmt.run(group_id || null, card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1, record_date || '')
+    addFund({ group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date, currency }) {
+      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      const result = stmt.run(group_id || null, card_no, card_date, cvv, status, in_amount || 0, in_rate || 1, out_amount || 0, out_rate || 1, record_date || '', currency || 'USD')
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(result.lastInsertRowid)
     },
     updateFundOut(id, { out_amount, out_rate, out_date, out_to, status }) {
@@ -134,10 +136,10 @@ export function createDb(userDataPath) {
       return { ok: true }
     },
     addFundsBatch(rows) {
-      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      const stmt = db.prepare('INSERT INTO funds (group_id, card_no, card_date, cvv, status, in_amount, in_rate, out_amount, out_rate, record_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       const insertMany = db.transaction((items) => {
         for (const r of items) {
-          stmt.run(r.group_id || null, r.card_no, r.card_date, r.cvv, r.status, r.in_amount || 0, r.in_rate || 1, r.out_amount || 0, r.out_rate || 1, r.record_date || '')
+          stmt.run(r.group_id || null, r.card_no, r.card_date, r.cvv, r.status, r.in_amount || 0, r.in_rate || 1, r.out_amount || 0, r.out_rate || 1, r.record_date || '', r.currency || 'USD')
         }
       })
       insertMany(rows)
