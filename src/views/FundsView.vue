@@ -286,9 +286,12 @@
             <Tag :value="data.currency || 'USD'" severity="info" />
           </template>
         </Column>
-        <Column field="card_no" header="卡片信息" style="min-width:240px">
+        <Column field="card_no" header="卡片信息" style="min-width:280px">
           <template #body="{data}">
             <span class="card-inline">{{ data.card_no }} {{ data.card_date }} {{ data.cvv }}</span>
+            <button class="copy-card-btn" @click="copyCardInfo(data)" title="复制卡片信息">
+              <i class="pi pi-copy"></i>
+            </button>
           </template>
         </Column>
         <Column v-if="activeGroup === null" header="供应商" style="min-width:70px">
@@ -435,9 +438,9 @@
           <Select v-model="form.currency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <Divider />
-        <div class="form-hint">快速输入格式：<code>卡号 日期 CVV [状态] 进账金额*进账汇率</code></div>
-        <div class="form-hint-eg">例：5214160092182610 04/30 188 完成 600*5.95</div>
-        <Textarea v-model="quickInput" rows="2" placeholder="粘贴快捷格式..." class="w-full" @input="parseQuick" autoResize />
+        <div class="form-hint">快速输入格式（每行一个字段，空行可有可无）：</div>
+        <div class="form-hint-eg">卡号 → 日期 → CVV → 金额 → 汇率</div>
+        <Textarea v-model="quickInput" rows="6" placeholder="5157631407152083&#10;03/30&#10;475&#10;&#10;310&#10;6.05" class="w-full" @input="parseQuick" autoResize />
         <Divider />
         <div class="form-grid">
           <div class="form-field">
@@ -566,9 +569,9 @@
           <label>货币类型</label>
           <Select v-model="batchCurrency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
-        <div class="form-hint">每行一条记录，格式：<code>卡号 日期 CVV [状态] 进账金额*进账汇率</code></div>
-        <div class="form-hint-eg">例：5214160092182610 04/30 188 完成 600*5.95</div>
-        <Textarea v-model="batchInput" rows="8" placeholder="粘贴多行数据..." class="w-full" @input="parseBatch" autoResize />
+        <div class="form-hint">每条记录 5 行（每行一个字段，空行可有可无）：</div>
+        <div class="form-hint-eg">卡号 → 日期 → CVV → 金额 → 汇率（多条记录连续输入）</div>
+        <Textarea v-model="batchInput" rows="8" placeholder="5157631407152083&#10;03/30&#10;475&#10;&#10;310&#10;6.05&#10;5214160092182610&#10;04/30&#10;188&#10;&#10;600&#10;5.95" class="w-full" @input="parseBatch" autoResize />
         <div v-if="batchRows.length" style="margin-top:10px">
           <div class="batch-preview-header">预览（{{ batchRows.length }} 条）</div>
           <div class="batch-preview-table">
@@ -1214,26 +1217,30 @@ function openBatch() {
   showBatch.value = true
 }
 
-function parseLine(line) {
-  const parts = line.trim().split(/\s+/)
-  if (parts.length < 4) return null
-  const amtField = parts.length >= 5 ? parts[4] : parts[3]
-  const [amt, rate] = (amtField || '').split('*')
-  return {
-    card_no: String(parts[0]),
-    card_date: String(parts[1]),
-    cvv: String(parts[2]),
-    status: '待出账',
-    in_amount: parseFloat(amt) || 0,
-    in_rate: parseFloat(rate) || 1,
-    out_amount: 0,
-    out_rate: 1,
+function parseMultiLineRecords(text) {
+  const lines = text.split('\n').map(l => l.trim())
+  const nonEmpty = []
+  for (const l of lines) {
+    if (l !== '') nonEmpty.push(l)
   }
+  const records = []
+  for (let i = 0; i + 4 < nonEmpty.length; i += 5) {
+    records.push({
+      card_no: String(nonEmpty[i]),
+      card_date: String(nonEmpty[i + 1]),
+      cvv: String(nonEmpty[i + 2]),
+      status: '待出账',
+      in_amount: parseFloat(nonEmpty[i + 3]) || 0,
+      in_rate: parseFloat(nonEmpty[i + 4]) || 1,
+      out_amount: 0,
+      out_rate: 1,
+    })
+  }
+  return records
 }
 
 function parseBatch() {
-  const lines = batchInput.value.split('\n').filter(l => l.trim())
-  batchRows.value = lines.map(parseLine).filter(Boolean)
+  batchRows.value = parseMultiLineRecords(batchInput.value)
 }
 
 async function submitBatch() {
@@ -1259,15 +1266,14 @@ async function submitBatch() {
 }
 
 function parseQuick() {
-  const parts = quickInput.value.trim().split(/\s+/)
-  if (parts.length >= 4) {
-    form.value.card_no = parts[0]
-    form.value.card_date = parts[1]
-    form.value.cvv = parts[2]
-    const amtField = parts.length >= 5 ? parts[4] : parts[3]
-    const [amt, rate] = (amtField || '').split('*')
-    form.value.in_amount = parseFloat(amt) || 0
-    form.value.in_rate = parseFloat(rate) || 1
+  const records = parseMultiLineRecords(quickInput.value)
+  if (records.length > 0) {
+    const r = records[0]
+    form.value.card_no = r.card_no
+    form.value.card_date = r.card_date
+    form.value.cvv = r.cvv
+    form.value.in_amount = r.in_amount
+    form.value.in_rate = r.in_rate
   }
 }
 
@@ -1328,6 +1334,16 @@ async function submitEdit() {
   showEdit.value = false
   toast.add({ severity: 'success', summary: autoSettled ? '已出账并自动结算' : '已更新', life: 2000 })
   refreshAllFunds()
+}
+
+async function copyCardInfo(data) {
+  const text = `${data.card_no} ${data.card_date} ${data.cvv} 完成`
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.add({ severity: 'success', summary: '已复制', life: 1500 })
+  } catch {
+    toast.add({ severity: 'error', summary: '复制失败', life: 2000 })
+  }
 }
 
 function deleteFund(id) {
@@ -1721,6 +1737,13 @@ function fmtDate(d) {
 .group-hint p { font-size: 13px; }
 
 .card-inline { font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 14px; letter-spacing: 0.3px; color: var(--mac-text); user-select: text; }
+.copy-card-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; margin-left: 6px; border: none; background: transparent;
+  border-radius: 4px; cursor: pointer; color: var(--mac-text-secondary); font-size: 12px;
+  transition: background 0.15s, color 0.15s; vertical-align: middle;
+}
+.copy-card-btn:hover { background: var(--mac-hover); color: var(--mac-accent); }
 .card-info { display: flex; flex-direction: column; gap: 4px; }
 .card-meta { display: flex; gap: 6px; }
 .card-badge { font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 11px; color: var(--mac-text-secondary); background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; }
