@@ -1354,7 +1354,7 @@ async function submitEdit() {
 }
 
 async function copyCardInfo(data) {
-  const text = `${data.card_no} ${data.card_date} ${data.cvv} 完成`
+  const text = `${data.card_no} ${data.card_date} ${data.cvv} 完成 ${data.in_amount}`
   try {
     await navigator.clipboard.writeText(text)
     toast.add({ severity: 'success', summary: '已复制', life: 1500 })
