@@ -438,9 +438,9 @@
           <Select v-model="form.currency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <Divider />
-        <div class="form-hint">快速输入格式（每行一个字段，空行可有可无）：</div>
-        <div class="form-hint-eg">卡号 → 日期 → CVV → 金额 → 汇率</div>
-        <Textarea v-model="quickInput" rows="6" placeholder="5157631407152083&#10;03/30&#10;475&#10;&#10;310&#10;6.05" class="w-full" @input="parseQuick" autoResize />
+        <div class="form-hint">快速输入格式（单行，空格分隔）：</div>
+        <div class="form-hint-eg">卡号 日期 CVV 完成 金额*汇率</div>
+        <Textarea v-model="quickInput" rows="2" placeholder="4008256598452236 0525 026 完成 920*5.8" class="w-full" @input="parseQuick" autoResize />
         <Divider />
         <div class="form-grid">
           <div class="form-field">
@@ -569,9 +569,9 @@
           <label>货币类型</label>
           <Select v-model="batchCurrency" :options="currencyOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
-        <div class="form-hint">每条记录 5 行（每行一个字段，空行可有可无）：</div>
-        <div class="form-hint-eg">卡号 → 日期 → CVV → 金额 → 汇率（多条记录连续输入）</div>
-        <Textarea v-model="batchInput" rows="8" placeholder="5157631407152083&#10;03/30&#10;475&#10;&#10;310&#10;6.05&#10;5214160092182610&#10;04/30&#10;188&#10;&#10;600&#10;5.95" class="w-full" @input="parseBatch" autoResize />
+        <div class="form-hint">每行一条记录（空格分隔）：</div>
+        <div class="form-hint-eg">卡号 日期 CVV 完成 金额*汇率</div>
+        <Textarea v-model="batchInput" rows="8" placeholder="4008256598452236 0525 026 完成 920*5.8&#10;5214160092182610 0430 188 完成 600*5.95&#10;5157631407152083 0330 475 完成 310*6.05" class="w-full" @input="parseBatch" autoResize />
         <div v-if="batchRows.length" style="margin-top:10px">
           <div class="batch-preview-header">预览（{{ batchRows.length }} 条）</div>
           <div class="batch-preview-table">
@@ -1217,21 +1217,38 @@ function openBatch() {
   showBatch.value = true
 }
 
-function parseMultiLineRecords(text) {
-  const lines = text.split('\n').map(l => l.trim())
-  const nonEmpty = []
-  for (const l of lines) {
-    if (l !== '') nonEmpty.push(l)
-  }
+function parseRecords(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '')
   const records = []
-  for (let i = 0; i + 4 < nonEmpty.length; i += 5) {
+  for (const line of lines) {
+    const parts = line.split(/\s+/)
+    if (parts.length < 3) continue
+    const card_no = parts[0]
+    const card_date = parts[1]
+    const cvv = parts[2]
+    let in_amount = 0
+    let in_rate = 1
+    let amountStr = ''
+    if (parts.length >= 5) {
+      amountStr = parts[4]
+    } else if (parts.length === 4) {
+      const p3 = parts[3]
+      if (/[\d.*]/.test(p3)) amountStr = p3
+    }
+    if (amountStr && amountStr.includes('*')) {
+      const [amt, rate] = amountStr.split('*')
+      in_amount = parseFloat(amt) || 0
+      in_rate = parseFloat(rate) || 1
+    } else if (amountStr) {
+      in_amount = parseFloat(amountStr) || 0
+    }
     records.push({
-      card_no: String(nonEmpty[i]),
-      card_date: String(nonEmpty[i + 1]),
-      cvv: String(nonEmpty[i + 2]),
+      card_no: String(card_no),
+      card_date: String(card_date),
+      cvv: String(cvv),
       status: '待出账',
-      in_amount: parseFloat(nonEmpty[i + 3]) || 0,
-      in_rate: parseFloat(nonEmpty[i + 4]) || 1,
+      in_amount,
+      in_rate,
       out_amount: 0,
       out_rate: 1,
     })
@@ -1240,7 +1257,7 @@ function parseMultiLineRecords(text) {
 }
 
 function parseBatch() {
-  batchRows.value = parseMultiLineRecords(batchInput.value)
+  batchRows.value = parseRecords(batchInput.value)
 }
 
 async function submitBatch() {
@@ -1266,7 +1283,7 @@ async function submitBatch() {
 }
 
 function parseQuick() {
-  const records = parseMultiLineRecords(quickInput.value)
+  const records = parseRecords(quickInput.value)
   if (records.length > 0) {
     const r = records[0]
     form.value.card_no = r.card_no
