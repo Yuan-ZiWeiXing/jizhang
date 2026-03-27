@@ -69,11 +69,19 @@
         <div class="sidebar-section">
           <div
             class="sidebar-item"
+            :class="{ active: currentView === 'upstream' }"
+            @click="currentView = 'upstream'"
+          >
+            <i class="pi pi-sitemap"></i>
+            <span>供应商</span>
+          </div>
+          <div
+            class="sidebar-item"
             :class="{ active: currentView === 'downstream' }"
             @click="currentView = 'downstream'"
           >
             <i class="pi pi-users"></i>
-            <span>下游</span>
+            <span>出货商</span>
           </div>
         </div>
 
@@ -107,6 +115,7 @@ import DashboardView from './views/DashboardView.vue'
 import FundsView from './views/FundsView.vue'
 import WireTransferView from './views/WireTransferView.vue'
 import One4AllView from './views/One4AllView.vue'
+import UpstreamView from './views/UpstreamView.vue'
 import DownstreamView from './views/DownstreamView.vue'
 import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
@@ -158,6 +167,7 @@ const currentComponent = computed(() => {
     funds: FundsView,
     wire: WireTransferView,
     one4all: One4AllView,
+    upstream: UpstreamView,
     downstream: DownstreamView,
   }
   return map[currentView.value]

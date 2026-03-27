@@ -53,7 +53,7 @@
           <Select v-model="statsCurrency" :options="allCurrencies" placeholder="全部" showClear class="filter-select" />
         </div>
         <div class="filter-item">
-          <label>下游</label>
+          <label>出货商</label>
           <InputText v-model="statsOutTo" placeholder="搜索..." class="filter-text" />
         </div>
         <Button v-if="hasStatsFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearStatsFilters" />
@@ -155,7 +155,7 @@
       <div class="tab-list">
         <div class="tab-item" :class="{active: activeGroup === null}" @click="switchGroup(null)">全部</div>
         <div
-          v-for="g in groups" :key="g.id"
+          v-for="g in filteredGroups" :key="g.id"
           class="tab-item"
           :class="{active: activeGroup === g.id}"
           @click="switchGroup(g.id)"
@@ -212,6 +212,10 @@
         <Select v-model="dtFilters.currency.value" :options="currencyFilterOptions" placeholder="全部" showClear class="filter-select" />
       </div>
       <div class="filter-item">
+        <label>供应商</label>
+        <InputText v-model="groupSearch" placeholder="搜索供应商..." class="filter-text" />
+      </div>
+      <div class="filter-item">
         <label>卡号</label>
         <InputText v-model="dtFilters.card_no.value" placeholder="搜索..." class="filter-text" />
       </div>
@@ -233,7 +237,7 @@
         </DatePicker>
       </div>
       <div class="filter-item">
-        <label>下游</label>
+        <label>出货商</label>
         <InputText v-model="dtFilters.out_to.value" placeholder="搜索..." class="filter-text" />
       </div>
       <Button v-if="hasManageFilter" label="清除" icon="pi pi-filter-slash" text size="small" @click="clearManageFilters" />
@@ -487,9 +491,9 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>下游</label>
-          <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择下游" showClear class="w-full" />
-          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类下游，请在「下游」页添加、勾选「资金」并保持启用。</p>
+          <label>出货商</label>
+          <Select v-model="editForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加、勾选「资金」并保持启用。</p>
           <div v-if="selectedDownstream" class="ds-hint">
             预付剩余：¥{{ fmtNum((selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0)) }}
             <template v-if="(selectedDownstream.prepaid || 0) - (selectedDownstream.prepaid_used || 0) > 0">
@@ -534,15 +538,15 @@
           </DatePicker>
         </div>
         <div class="form-field">
-          <label>下游</label>
-          <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择下游" showClear class="w-full" />
-          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类下游，请在「下游」页添加并保持启用。</p>
+          <label>出货商</label>
+          <Select v-model="batchEditForm.downstream_id" :options="downstreamOptions" optionLabel="label" optionValue="value" placeholder="选择出货商" showClear class="w-full" />
+          <p v-if="!downstreamOptions.length" class="form-hint-mini">暂无已启用的资金类出货商，请在「出货商」页添加并保持启用。</p>
         </div>
         <div class="form-field">
           <label>出账汇率</label>
           <InputNumber v-model="batchEditForm.out_rate" class="w-full" :minFractionDigits="4" />
         </div>
-        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额。选择下游后，预付余额内的记录自动结算。</div>
+        <div class="batch-edit-note">出账金额将自动使用每条记录的进账金额。选择出货商后，预付余额内的记录自动结算。</div>
       </div>
       <template #footer>
         <Button label="取消" text @click="showBatchEdit = false" />
@@ -700,6 +704,7 @@ const currencyOptions = [
 const funds = ref([])
 const allFunds = ref([])
 const groups = ref([])
+const groupSearch = ref('')
 const downstreams = ref([])
 const activeGroup = ref(null)
 const loading = ref(false)
@@ -808,6 +813,13 @@ const activeGroupData = computed(() => {
   return groups.value.find(g => g.id === activeGroup.value)
 })
 
+const filteredGroups = computed(() => {
+  const kw = groupSearch.value.trim().toLowerCase()
+  const enabledGroups = groups.value.filter(g => g == null || g.enabled == null || Number(g.enabled) === 1)
+  if (!kw) return enabledGroups
+  return enabledGroups.filter(g => String(g.name || '').toLowerCase().includes(kw))
+})
+
 const groupInTotal = computed(() => {
   if (activeGroup.value === null) return 0
   return allFunds.value
@@ -862,7 +874,7 @@ const statsGroup = ref(null)
 const statsStatus = ref(null)
 const statsCurrency = ref(null)
 const statsOutTo = ref('')
-const statsGroupOptions = computed(() => groups.value)
+const statsGroupOptions = computed(() => groups.value.filter(g => g == null || g.enabled == null || Number(g.enabled) === 1))
 
 const hasStatsFilter = computed(() =>
   statsRecordRange.value || statsOutRange.value || statsGroup.value !== null || statsStatus.value || statsCurrency.value || statsOutTo.value
@@ -1074,7 +1086,7 @@ const exportFields = ref([
   { key: 'out_rate', label: '出账汇率', checked: true },
   { key: 'out_total', label: '出账合计', checked: true },
   { key: 'out_date', label: '出账日期', checked: true },
-  { key: 'out_to', label: '下游', checked: true },
+  { key: 'out_to', label: '出货商', checked: true },
   { key: 'profit', label: '盈利', checked: true },
   { key: 'settled', label: '结算', checked: true },
 ])
@@ -1270,7 +1282,7 @@ async function submitBatch() {
   if (activeGroup.value && activeGroupData.value?.prepaid) {
     const totalInRmb = plain.reduce((s, r) => s + (r.in_amount || 0) * (r.in_rate || 1), 0)
     if (totalInRmb > 0) {
-      const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, totalInRmb)
+      const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, totalInRmb, null)
       if (updated && activeGroupData.value) activeGroupData.value.prepaid_used = updated.prepaid_used
     }
   }
@@ -1312,7 +1324,7 @@ async function submitAdd() {
   funds.value.unshift(saved)
   const inRmb = (Number(form.value.in_amount) || 0) * (Number(form.value.in_rate) || 1)
   if (inRmb > 0 && activeGroup.value && activeGroupData.value?.prepaid) {
-    const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, inRmb)
+    const updated = await window.api.addGroupPrepaidUsed(activeGroup.value, inRmb, saved?.id || null)
     if (updated && activeGroupData.value) activeGroupData.value.prepaid_used = updated.prepaid_used
   }
   form.value = emptyForm()
@@ -1343,7 +1355,7 @@ async function submitEdit() {
     settled: autoSettled,
   })
   if (canAutoSettle) {
-    await window.api.addDownstreamPrepaidUsed(dsId, outRmb)
+    await window.api.addDownstreamPrepaidUsed(dsId, outRmb, 'funds', editId.value || null)
     await loadDownstreams()
   }
   const idx = funds.value.findIndex(f => f.id === editId.value)
@@ -1416,7 +1428,7 @@ async function submitBatchEdit() {
   }
   if (ds && settledCount > 0) {
     const totalDeducted = (ds.prepaid - ds.prepaid_used) - dsRemaining
-    await window.api.addDownstreamPrepaidUsed(dsId, totalDeducted)
+    await window.api.addDownstreamPrepaidUsed(dsId, totalDeducted, 'funds', null)
     await loadDownstreams()
   }
   showBatchEdit.value = false
@@ -1540,7 +1552,7 @@ function fmtDate(d) {
 
 <style scoped>
 .funds-view { display: flex; flex-direction: column; height: 100%; background: var(--mac-bg); }
-.manage-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.manage-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 16px; gap: 12px; }
 
 .top-tabs {
   display: flex; gap: 2px;
@@ -1609,10 +1621,11 @@ function fmtDate(d) {
 
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--mac-border);
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(10px);
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--mac-border);
+  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
 .view-title { font-size: 15px; font-weight: 600; color: var(--mac-text); }
@@ -1632,11 +1645,12 @@ function fmtDate(d) {
 :deep(.p-paginator .p-paginator-current) { font-size: 12px; white-space: nowrap; }
 
 .group-tabs {
-  border-bottom: 1px solid var(--mac-border);
+  border: 1px solid var(--mac-border);
   background: rgba(255,255,255,0.4);
   padding: 0 12px;
   overflow: hidden;
   flex-shrink: 0;
+  border-radius: 14px;
 }
 .tab-list {
   display: flex; align-items: center; gap: 2px;
@@ -1676,10 +1690,12 @@ function fmtDate(d) {
 
 .prepaid-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--mac-border);
-  background: rgba(0,122,255,0.04);
+  padding: 10px 14px;
+  border: 1px solid rgba(0,122,255,0.12);
+  background: rgba(255,255,255,0.58);
+  border-radius: 14px;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 .prepaid-info { display: flex; align-items: center; gap: 8px; }
 .prepaid-label { font-size: 12px; color: var(--mac-text-secondary); }
@@ -1695,9 +1711,10 @@ function fmtDate(d) {
 
 .filter-bar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--mac-border);
-  background: rgba(255,255,255,0.3);
+  padding: 10px 14px;
+  border: 1px solid var(--mac-border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.45);
   flex-shrink: 0;
 }
 .filter-item { display: flex; align-items: center; gap: 6px; }
@@ -1707,26 +1724,40 @@ function fmtDate(d) {
 .filter-text { width: 130px; }
 .batch-bar {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 16px;
-  background: rgba(0,122,255,0.06);
-  border-bottom: 1px solid var(--mac-border);
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.58);
+  border: 1px solid rgba(0,122,255,0.12);
+  border-radius: 14px;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 .batch-info { font-size: 13px; font-weight: 600; color: var(--mac-accent, #007aff); }
 .batch-edit-hint { font-size: 13px; color: var(--mac-text-secondary); padding: 4px 0 8px; }
 .batch-edit-note { font-size: 12px; color: var(--mac-text-secondary); font-style: italic; margin-top: 4px; }
 .form-hint-mini { font-size: 12px; color: #e67e22; margin: 4px 0 0; }
-.table-wrap { flex: 1; overflow: hidden; padding: 8px 12px; position: relative; display: flex; flex-direction: column; min-height: 0; }
+.table-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: rgba(255,255,255,0.58);
+  border: 1px solid var(--mac-border);
+  border-radius: 16px;
+}
 :deep(.funds-table) { display: flex; flex-direction: column; height: 100%; }
 :deep(.funds-table .p-datatable-wrapper) { flex: 1; min-height: 0; overflow: auto; }
-:deep(.funds-table .p-paginator-bottom) { flex-shrink: 0; border-top: 1px solid var(--mac-border); }
+:deep(.funds-table .p-paginator-bottom) { flex-shrink: 0; border-top: 1px solid var(--mac-border); background: rgba(255,255,255,0.92); }
 .stats-bar {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 10px 16px;
-  border-top: 1px solid var(--mac-border);
-  background: rgba(255,255,255,0.85);
+  padding: 10px 14px;
+  border: 1px solid var(--mac-border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.72);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 .stat-divider { width: 1px; height: 24px; background: var(--mac-border); flex-shrink: 0; }
 .stat-currency-group {

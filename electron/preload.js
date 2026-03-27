@@ -39,9 +39,26 @@ contextBridge.exposeInMainWorld('api', {
   getAllFundGroups: () => ipcRenderer.invoke('fundGroups:getAll'),
   addFundGroup: (name) => ipcRenderer.invoke('fundGroups:add', name),
   renameFundGroup: (id, name) => ipcRenderer.invoke('fundGroups:rename', id, name),
+  setFundGroupEnabled: (id, enabled) => ipcRenderer.invoke('fundGroups:setEnabled', id, enabled),
   deleteFundGroup: (id) => ipcRenderer.invoke('fundGroups:delete', id),
   updateGroupPrepaid: (id, prepaid) => ipcRenderer.invoke('fundGroups:updatePrepaid', id, prepaid),
-  addGroupPrepaidUsed: (groupId, amount) => ipcRenderer.invoke('fundGroups:addPrepaidUsed', groupId, amount),
+  addGroupPrepaidUsed: (groupId, amount, relatedId) => ipcRenderer.invoke('fundGroups:addPrepaidUsed', groupId, amount, relatedId),
+
+  // Wire transfers
+  getAllWireTransfers: () => ipcRenderer.invoke('wireTransfers:getAll'),
+  getWireTransfersByGroup: (groupId) => ipcRenderer.invoke('wireTransfers:getByGroup', groupId),
+  addWireTransfer: (data) => ipcRenderer.invoke('wireTransfers:add', data),
+  updateWireTransferIn: (id, data) => ipcRenderer.invoke('wireTransfers:updateIn', id, data),
+  updateWireTransferOut: (id, data) => ipcRenderer.invoke('wireTransfers:updateOut', id, data),
+  updateWireTransferSettled: (id, settled) => ipcRenderer.invoke('wireTransfers:updateSettled', id, settled),
+  deleteWireTransfer: (id) => ipcRenderer.invoke('wireTransfers:delete', id),
+  getAllWireGroups: () => ipcRenderer.invoke('wireGroups:getAll'),
+  addWireGroup: (name) => ipcRenderer.invoke('wireGroups:add', name),
+  renameWireGroup: (id, name) => ipcRenderer.invoke('wireGroups:rename', id, name),
+  setWireGroupEnabled: (id, enabled) => ipcRenderer.invoke('wireGroups:setEnabled', id, enabled),
+  updateWireGroupPrepaid: (id, prepaid) => ipcRenderer.invoke('wireGroups:updatePrepaid', id, prepaid),
+  addWireGroupPrepaidUsed: (groupId, amount, relatedId) => ipcRenderer.invoke('wireGroups:addPrepaidUsed', groupId, amount, relatedId),
+  deleteWireGroup: (id) => ipcRenderer.invoke('wireGroups:delete', id),
 
   // Downstreams
   getAllDownstreams: () => ipcRenderer.invoke('downstreams:getAll'),
@@ -49,8 +66,9 @@ contextBridge.exposeInMainWorld('api', {
   updateDownstream: (id, name, ledgerTypes) => ipcRenderer.invoke('downstreams:update', id, name, ledgerTypes),
   deleteDownstream: (id) => ipcRenderer.invoke('downstreams:delete', id),
   addDownstreamPrepaid: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaid', id, amount),
-  addDownstreamPrepaidUsed: (id, amount) => ipcRenderer.invoke('downstreams:addPrepaidUsed', id, amount),
+  addDownstreamPrepaidUsed: (id, amount, ledgerType, relatedId) => ipcRenderer.invoke('downstreams:addPrepaidUsed', id, amount, ledgerType, relatedId),
   setDownstreamEnabled: (id, enabled) => ipcRenderer.invoke('downstreams:setEnabled', id, enabled),
+  getPrepaidLogsByTarget: (targetKind, targetId) => ipcRenderer.invoke('prepaidLogs:getByTarget', targetKind, targetId),
 
   // Lock password
   hasLockPassword: () => ipcRenderer.invoke('lock:hasPassword'),

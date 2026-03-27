@@ -1,7 +1,7 @@
 <template>
   <div class="downstream-page">
     <div class="ds-header">
-      <span class="ds-title"><i class="pi pi-users"></i> 下游管理</span>
+      <span class="ds-title"><i class="pi pi-users"></i> 出货商管理</span>
       <div class="ds-toolbar-filters">
         <span class="ds-tf-label">记账类型</span>
         <Select
@@ -14,17 +14,17 @@
           class="ds-tf-select"
         />
       </div>
-      <Button label="添加下游" icon="pi pi-plus" size="small" @click="openAdd" />
+      <Button label="添加出货商" icon="pi pi-plus" size="small" @click="openAdd" />
     </div>
 
     <div class="ds-list">
       <div v-if="!downstreams.length" class="ds-empty">
         <i class="pi pi-users"></i>
-        <p>暂无下游，点击添加</p>
+        <p>暂无出货商，点击添加</p>
       </div>
       <div v-else-if="!filteredDownstreams.length" class="ds-empty">
         <i class="pi pi-filter-slash"></i>
-        <p>当前记账类型下暂无下游</p>
+        <p>当前记账类型下暂无出货商</p>
       </div>
       <div
         v-for="ds in filteredDownstreams"
@@ -54,6 +54,7 @@
             </div>
             <div class="ds-actions">
             <Button icon="pi pi-list" text rounded size="small" @click="openRecords(ds)" title="查看记录" />
+            <Button icon="pi pi-history" text rounded size="small" @click="openPrepaidLogs(ds)" title="预付日志" />
             <Button icon="pi pi-pencil" text rounded size="small" @click="openRename(ds)" />
             <Button icon="pi pi-plus-circle" text rounded size="small" severity="success" @click="openPrepaid(ds)" title="添加预付" />
             <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="doDelete(ds)" />
@@ -80,7 +81,7 @@
       </div>
     </div>
 
-    <Dialog v-model:visible="showAdd" modal header="添加下游" :style="{width:'400px'}" :draggable="false">
+    <Dialog v-model:visible="showAdd" modal header="添加出货商" :style="{width:'400px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:10px;">
         <div>
           <label class="field-label">归属记账类型（可多选）</label>
@@ -98,7 +99,7 @@
         </div>
         <div>
           <label class="field-label">名称</label>
-          <InputText v-model="newName" placeholder="输入下游名称" class="w-full" />
+          <InputText v-model="newName" placeholder="输入出货商名称" class="w-full" />
         </div>
         <div>
           <label class="field-label">初始预付金额（可选）</label>
@@ -111,7 +112,7 @@
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="showRename" modal header="编辑下游" :style="{width:'400px'}" :draggable="false">
+    <Dialog v-model:visible="showRename" modal header="编辑出货商" :style="{width:'400px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:10px;">
         <div>
           <label class="field-label">归属记账类型（可多选）</label>
@@ -140,7 +141,7 @@
 
     <Dialog v-model:visible="showPrepaid" modal header="添加预付金额" :style="{width:'350px'}" :draggable="false">
       <div style="padding-top:8px; display:flex; flex-direction:column; gap:8px;">
-        <label style="font-size:13px; color:var(--mac-text-secondary)">下游：{{ prepaidTarget?.name }}</label>
+        <label style="font-size:13px; color:var(--mac-text-secondary)">出货商：{{ prepaidTarget?.name }}</label>
         <div v-if="prepaidTarget?.prepaid" style="font-size:12px; color:var(--mac-text-secondary)">
           当前预付：¥{{ fmt(prepaidTarget.prepaid) }}　剩余：¥{{ fmt(remaining(prepaidTarget)) }}
         </div>
@@ -176,18 +177,16 @@
             />
           </div>
         </div>
-        <div v-if="effectiveRecordLedger !== 'funds'" class="ds-rec-hint">{{ nonFundsLedgerRecordsHint }}</div>
-        <template v-else>
-          <div v-if="!filteredDsRecords.length" class="ds-empty" style="padding:24px">
-            <p v-if="!dsRecordsRaw.length">暂无消费记录</p>
-            <p v-else-if="!settleStageRecords.length">暂无待结算或已完成的记录</p>
-            <p v-else>当前筛选下无记录</p>
-          </div>
-          <table v-else class="records-table">
+        <div v-if="!filteredDsRecords.length" class="ds-empty" style="padding:24px">
+          <p v-if="!dsRecordsRaw.length">暂无消费记录</p>
+          <p v-else-if="!settleStageRecords.length">暂无待结算或已完成的记录</p>
+          <p v-else>当前筛选下无记录</p>
+        </div>
+        <table v-else class="records-table">
           <thead>
             <tr>
               <th>日期</th>
-              <th>卡片信息</th>
+              <th>{{ effectiveRecordLedger === 'wire' ? '电汇信息' : '卡片信息' }}</th>
               <th>出账金额</th>
               <th>汇率</th>
               <th>折合(¥)</th>
@@ -197,7 +196,17 @@
           <tbody>
             <tr v-for="r in filteredDsRecords" :key="r.id">
               <td>{{ r.out_date || r.record_date || '-' }}</td>
-              <td><span class="card-inline">{{ r.card_no }} {{ r.card_date }} {{ r.cvv }}</span></td>
+              <td>
+                <template v-if="effectiveRecordLedger === 'wire'">
+                  <div class="wire-record-inline">
+                    <span class="card-inline">{{ r.code || '-' }}</span>
+                    <span class="wire-record-sub">{{ supplierName(r.group_id) }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <span class="card-inline">{{ r.card_no }} {{ r.card_date }} {{ r.cvv }}</span>
+                </template>
+              </td>
               <td>{{ csym(r.currency) }}{{ fmt(r.out_amount) }}</td>
               <td>{{ r.out_rate }}</td>
               <td>¥{{ fmt((r.out_amount || 0) * (r.out_rate || 1)) }}</td>
@@ -212,7 +221,52 @@
             </tr>
           </tfoot>
         </table>
-        </template>
+      </div>
+    </Dialog>
+
+    <Dialog v-model:visible="showPrepaidLogs" modal :header="'预付日志 — ' + (logTarget?.name || '')" :style="{width:'900px', maxWidth:'95vw'}" :draggable="false">
+      <div class="records-wrap">
+        <div class="ds-records-toolbar">
+          <div v-if="showLogLedgerFilter" class="ds-rt-item">
+            <span class="ds-rt-label">记账类型</span>
+            <Select
+              v-model="logLedgerFilter"
+              :options="logLedgerTypeOptions"
+              optionLabel="label"
+              optionValue="value"
+              class="ds-rt-select"
+            />
+          </div>
+        </div>
+        <div v-if="!filteredPrepaidLogs.length" class="ds-empty" style="padding:24px">
+          <p>暂无预付日志</p>
+        </div>
+        <table v-else class="records-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>类型</th>
+              <th>记账类型</th>
+              <th>操作前</th>
+              <th>操作</th>
+              <th>操作后</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="l in filteredPrepaidLogs" :key="l.id">
+              <td>{{ l.created_at || '-' }}</td>
+              <td><span class="rec-status" :class="l.event_type === 'consume' ? 'pending' : 'done'">{{ prepaidEventLabel(l.event_type) }}</span></td>
+              <td>{{ logLedgerLabel(l.ledger_type) }}</td>
+              <td>¥{{ fmt(l.balance_before || 0) }}</td>
+              <td :class="l.event_type === 'consume' ? 'log-expense' : 'log-income'">
+                {{ l.event_type === 'consume' ? '-' : '+' }}¥{{ fmt(l.amount || 0) }}
+              </td>
+              <td>¥{{ fmt(l.balance_after || 0) }}</td>
+              <td>{{ l.note || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </Dialog>
 
@@ -222,7 +276,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ACCOUNTING_SUB_NAV } from '../config/accountingNav.js'
 import { parseDownstreamLedgerTypes, ledgerTypeLabel } from '../utils/downstreamLedger.js'
 import Button from 'primevue/button'
@@ -289,6 +343,10 @@ const dsRecordsRaw = ref([])
 const recordGroups = ref([])
 const recordLedgerFilter = ref('funds')
 const recordStatusFilter = ref(null)
+const showPrepaidLogs = ref(false)
+const logTarget = ref(null)
+const prepaidLogsRaw = ref([])
+const logLedgerFilter = ref(null)
 
 const recordStatusOptions = ['待结算', '已完成']
 
@@ -310,24 +368,29 @@ const effectiveRecordLedger = computed(() => {
   return recordLedgerFilter.value
 })
 
-const nonFundsLedgerRecordsHint = computed(() => {
-  const id = effectiveRecordLedger.value
-  if (id === 'wire') return '电汇暂无关联消费记录'
-  if (id === 'one4all') return 'One4All 暂无关联消费记录'
-  return '该记账类型暂无关联消费记录'
-})
-
 const settleStageRecords = computed(() =>
   dsRecordsRaw.value.filter(f => f.status === '待结算' || f.status === '已完成'),
 )
 
 const filteredDsRecords = computed(() => {
-  if (effectiveRecordLedger.value !== 'funds') return []
   let list = settleStageRecords.value
   if (recordStatusFilter.value) {
     list = list.filter(f => f.status === recordStatusFilter.value)
   }
   return list
+})
+const showLogLedgerFilter = computed(() => (logTarget.value ? parseDownstreamLedgerTypes(logTarget.value).length > 1 : false))
+const logLedgerTypeOptions = computed(() => {
+  const types = logTarget.value ? parseDownstreamLedgerTypes(logTarget.value) : []
+  return [{ label: '全部', value: null }, ...types.map(id => ({ label: ledgerTypeLabel(id), value: id }))]
+})
+const filteredPrepaidLogs = computed(() => {
+  let list = [...prepaidLogsRaw.value]
+  if (!logLedgerFilter.value) return list
+  return list.filter(l => {
+    const led = String(l.ledger_type || '')
+    return !led || led === logLedgerFilter.value
+  })
 })
 
 function recordStatusClass(status) {
@@ -340,6 +403,17 @@ function supplierName(gid) {
   if (!gid) return '-'
   const g = recordGroups.value.find(x => x.id === gid)
   return g ? g.name : '-'
+}
+
+function prepaidEventLabel(type) {
+  if (type === 'consume') return '消耗'
+  if (type === 'recharge') return '追加'
+  return type || '-'
+}
+
+function logLedgerLabel(ledger) {
+  if (!ledger) return '通用'
+  return ledgerTypeLabel(ledger)
 }
 
 const ledgerMultiOptions = computed(() =>
@@ -378,7 +452,7 @@ async function doAdd() {
   newPrepaid.value = 0
   showAdd.value = false
   await load()
-  toast.add({ severity: 'success', summary: '已添加下游', life: 2000 })
+  toast.add({ severity: 'success', summary: '已添加出货商', life: 2000 })
 }
 
 function openRename(ds) {
@@ -422,20 +496,53 @@ async function openRecords(ds) {
   const types = parseDownstreamLedgerTypes(ds)
   recordLedgerFilter.value = types.includes('funds') ? 'funds' : (types[0] || 'funds')
   recordStatusFilter.value = null
-  if (window.api) {
-    const all = await window.api.getAllFunds()
-    recordGroups.value = await window.api.getAllFundGroups()
-    dsRecordsRaw.value = all.filter(f => f.downstream_id === ds.id)
-  } else {
-    dsRecordsRaw.value = []
-    recordGroups.value = []
-  }
+  await refreshRecordRows(recordLedgerFilter.value)
   showRecords.value = true
 }
 
+async function openPrepaidLogs(ds) {
+  logTarget.value = ds
+  logLedgerFilter.value = null
+  prepaidLogsRaw.value = window.api?.getPrepaidLogsByTarget ? await window.api.getPrepaidLogsByTarget('downstream', ds.id) : []
+  showPrepaidLogs.value = true
+}
+
+async function refreshRecordRows(ledger) {
+  if (!recordsTarget.value || !window.api) {
+    dsRecordsRaw.value = []
+    recordGroups.value = []
+    return
+  }
+  if (ledger === 'wire') {
+    const [all, groups] = await Promise.all([
+      window.api.getAllWireTransfers ? window.api.getAllWireTransfers() : [],
+      window.api.getAllWireGroups ? window.api.getAllWireGroups() : [],
+    ])
+    dsRecordsRaw.value = all.filter(f => f.downstream_id === recordsTarget.value.id)
+    recordGroups.value = groups || []
+    return
+  }
+  if (ledger === 'funds') {
+    const [allFunds, fundGroups] = await Promise.all([
+      window.api.getAllFunds ? window.api.getAllFunds() : [],
+      window.api.getAllFundGroups ? window.api.getAllFundGroups() : [],
+    ])
+    dsRecordsRaw.value = allFunds.filter(f => f.downstream_id === recordsTarget.value.id)
+    recordGroups.value = fundGroups || []
+    return
+  }
+  dsRecordsRaw.value = []
+  recordGroups.value = []
+}
+
+watch(recordLedgerFilter, async (ledger) => {
+  if (!showRecords.value) return
+  await refreshRecordRows(ledger || 'funds')
+})
+
 function doDelete(ds) {
   confirm.require({
-    message: `确定删除下游"${ds.name}"？关联的资金记录将取消关联。`,
+    message: `确定删除出货商"${ds.name}"？关联记录将取消关联。`,
     header: '确认删除',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: '删除',
@@ -564,4 +671,6 @@ function doDelete(ds) {
 .rec-status.done { background: #d4edda; color: #155724; }
 .rec-status.settle { background: #cce5ff; color: #004085; }
 .rec-status.pending { background: #fff3cd; color: #856404; }
+.log-expense { color: #e67e22; font-weight: 600; }
+.log-income { color: #34c759; font-weight: 600; }
 </style>

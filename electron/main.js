@@ -149,12 +149,29 @@ function setupIpc() {
   ipcMain.handle('funds:updateSettled', (_, id, settled) => db.updateFundSettled(id, settled))
   ipcMain.handle('funds:batchUpdateSettled', (_, ids, settled) => db.batchUpdateSettled(ids, settled))
   ipcMain.handle('fundGroups:updatePrepaid', (_, id, prepaid) => db.updateGroupPrepaid(id, prepaid))
-  ipcMain.handle('fundGroups:addPrepaidUsed', (_, groupId, amount) => db.addGroupPrepaidUsed(groupId, amount))
+  ipcMain.handle('fundGroups:addPrepaidUsed', (_, groupId, amount, relatedId) => db.addGroupPrepaidUsed(groupId, amount, relatedId))
   ipcMain.handle('funds:getByGroup', (_, groupId) => db.getFundsByGroup(groupId))
   ipcMain.handle('fundGroups:getAll', () => db.getAllFundGroups())
   ipcMain.handle('fundGroups:add', (_, name) => db.addFundGroup(name))
   ipcMain.handle('fundGroups:rename', (_, id, name) => db.renameFundGroup(id, name))
+  ipcMain.handle('fundGroups:setEnabled', (_, id, enabled) => db.setFundGroupEnabled(id, enabled))
   ipcMain.handle('fundGroups:delete', (_, id) => db.deleteFundGroup(id))
+
+  // Wire transfers
+  ipcMain.handle('wireTransfers:getAll', () => db.getAllWireTransfers())
+  ipcMain.handle('wireTransfers:getByGroup', (_, groupId) => db.getWireTransfersByGroup(groupId))
+  ipcMain.handle('wireTransfers:add', (_, data) => db.addWireTransfer(data))
+  ipcMain.handle('wireTransfers:updateIn', (_, id, data) => db.updateWireTransferIn(id, data))
+  ipcMain.handle('wireTransfers:updateOut', (_, id, data) => db.updateWireTransferOut(id, data))
+  ipcMain.handle('wireTransfers:updateSettled', (_, id, settled) => db.updateWireTransferSettled(id, settled))
+  ipcMain.handle('wireTransfers:delete', (_, id) => db.deleteWireTransfer(id))
+  ipcMain.handle('wireGroups:getAll', () => db.getAllWireGroups())
+  ipcMain.handle('wireGroups:add', (_, name) => db.addWireGroup(name))
+  ipcMain.handle('wireGroups:rename', (_, id, name) => db.renameWireGroup(id, name))
+  ipcMain.handle('wireGroups:setEnabled', (_, id, enabled) => db.setWireGroupEnabled(id, enabled))
+  ipcMain.handle('wireGroups:updatePrepaid', (_, id, prepaid) => db.updateWireGroupPrepaid(id, prepaid))
+  ipcMain.handle('wireGroups:addPrepaidUsed', (_, groupId, amount, relatedId) => db.addWireGroupPrepaidUsed(groupId, amount, relatedId))
+  ipcMain.handle('wireGroups:delete', (_, id) => db.deleteWireGroup(id))
 
   // Downstreams
   ipcMain.handle('downstreams:getAll', () => db.getAllDownstreams())
@@ -169,7 +186,8 @@ function setupIpc() {
   ipcMain.handle('downstreams:delete', (_, id) => db.deleteDownstream(id))
   ipcMain.handle('downstreams:setEnabled', (_, id, enabled) => db.setDownstreamEnabled(id, enabled))
   ipcMain.handle('downstreams:addPrepaid', (_, id, amount) => db.addDownstreamPrepaid(id, amount))
-  ipcMain.handle('downstreams:addPrepaidUsed', (_, id, amount) => db.addDownstreamPrepaidUsed(id, amount))
+  ipcMain.handle('downstreams:addPrepaidUsed', (_, id, amount, ledgerType, relatedId) => db.addDownstreamPrepaidUsed(id, amount, ledgerType, relatedId))
+  ipcMain.handle('prepaidLogs:getByTarget', (_, targetKind, targetId) => db.getPrepaidLogs(targetKind, targetId))
 
   // Lock password
   ipcMain.handle('lock:hasPassword', () => db.hasLockPassword())
