@@ -35,8 +35,10 @@
         :class="{ 'us-card-disabled': !isUpEnabled(up) }"
       >
         <div class="us-card-header">
-          <div>
+          <div class="us-name-row">
             <span class="us-name">{{ up.name }}</span>
+          </div>
+          <div class="us-ledger-row">
             <div class="us-ledger-tags">
               <Tag
                 v-for="lid in up.ledger_types"
@@ -46,7 +48,7 @@
               />
             </div>
           </div>
-          <div class="us-header-right" @click.stop>
+          <div class="us-op-row" @click.stop>
             <div class="us-enable-row">
               <span class="us-enable-label">启用</span>
               <InputSwitch
@@ -679,7 +681,6 @@ watch(recordLedgerFilter, async (ledger) => {
 }
 .us-tf-label { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); white-space: nowrap; }
 .us-tf-select { width: 160px; max-width: 100%; }
-.us-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .us-enable-row { display: flex; align-items: center; gap: 6px; }
 .us-enable-label { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); }
 .us-title {
@@ -706,13 +707,20 @@ watch(recordLedgerFilter, async (ledger) => {
 }
 .us-card-disabled { opacity: 0.72; }
 .us-card-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.us-name-row,
+.us-ledger-row {
+  display: flex; align-items: center;
+}
+.us-op-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
 .us-name { font-size: 16px; font-weight: 600; color: var(--mac-text); }
 .us-ledger-tags {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
 }
-.us-actions { display: flex; gap: 2px; }
+.us-actions { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
 .us-card-body {
   display: flex; gap: 16px; flex-wrap: wrap;
 }

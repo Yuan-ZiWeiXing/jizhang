@@ -33,8 +33,10 @@
         :class="{ 'ds-card-disabled': !isDsEnabled(ds) }"
       >
         <div class="ds-card-header">
-          <div>
+          <div class="ds-name-row">
             <span class="ds-name">{{ ds.name }}</span>
+          </div>
+          <div class="ds-ledger-row">
             <div class="ds-ledger-tags">
               <Tag
                 v-for="lid in parseDownstreamLedgerTypes(ds)"
@@ -44,7 +46,7 @@
               />
             </div>
           </div>
-          <div class="ds-header-right" @click.stop>
+          <div class="ds-op-row" @click.stop>
             <div class="ds-enable-row">
               <span class="ds-enable-label">启用</span>
               <InputSwitch
@@ -576,7 +578,6 @@ function doDelete(ds) {
 }
 .ds-tf-label { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); white-space: nowrap; }
 .ds-tf-select { width: 160px; max-width: 100%; }
-.ds-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .ds-enable-row { display: flex; align-items: center; gap: 6px; }
 .ds-enable-label { font-size: 12px; font-weight: 600; color: var(--mac-text-secondary); }
 .ds-card-disabled { opacity: 0.72; }
@@ -587,7 +588,7 @@ function doDelete(ds) {
 .ds-title i { font-size: 18px; color: var(--mac-accent); }
 
 .ds-ledger-tags {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
 }
 .ds-multiselect { min-height: 42px; }
 
@@ -609,10 +610,17 @@ function doDelete(ds) {
   display: flex; flex-direction: column; gap: 10px;
 }
 .ds-card-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ds-name-row,
+.ds-ledger-row {
+  display: flex; align-items: center;
+}
+.ds-op-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
 .ds-name { font-size: 15px; font-weight: 600; color: var(--mac-text); }
-.ds-actions { display: flex; gap: 2px; }
+.ds-actions { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
 
 .ds-card-body {
   display: flex; gap: 16px; flex-wrap: wrap;
