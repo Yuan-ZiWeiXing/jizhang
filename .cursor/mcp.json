@@ -1,21 +1,30 @@
 {
-	"mcpServers": {
-		"project-dev-workflow": {
-			"command": "C:\\Program Files\\nodejs\\node.exe",
-			"args": [
-				"c:\\Users\\Administrator\\.cursor\\extensions\\codefree.codefree-cursor-unlimit-3.7.6\\dist\\mcp-server.js",
-				"--channel",
-				"dynamic",
-				"--workspace",
-				"c:\\Users\\Administrator\\Desktop\\jizhang2"
-			],
-			"disabled": false,
-			"autoApprove": [
-				"to1i_ik",
-				"kfrn_gs",
-				"gxtw_yq"
-			],
-			"timeoutMs": 604800000
-		}
-	}
+  "mcpServers": {
+    "project-dev-workflow": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "c:\\Users\\Administrator\\.cursor\\extensions\\codefree.codefree-cursor-unlimit-3.7.6\\dist\\mcp-server.js",
+        "--channel",
+        "dynamic",
+        "--workspace",
+        "c:\\Users\\Administrator\\Desktop\\jizhang2"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "to1i_ik",
+        "kfrn_gs",
+        "gxtw_yq"
+      ],
+      "timeoutMs": 604800000
+    },
+    "CursorMCP对话插件": {
+      "command": "node",
+      "args": [
+        "c:\\Users\\Administrator\\.cursor\\extensions\\local.xw-cursor-message-8.8.8\\dist\\mcp-server.mjs"
+      ],
+      "env": {
+        "MESSENGER_DATA_DIR": "C:\\Users\\Administrator\\.moyu-message\\b803e64d42bd"
+      }
+    }
+  }
 }
