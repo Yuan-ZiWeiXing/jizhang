@@ -45,15 +45,15 @@
         </div>
         <div class="fs-card">
           <div class="fs-card-label">总进账(¥)</div>
-          <div class="fs-card-val income">¥{{ fmtNum(statsData.totalIn) }}</div>
+          <div class="fs-card-val income"><i class="pi pi-arrow-down-left fs-card-arrow"></i>¥{{ fmtNum(statsData.totalIn) }}</div>
         </div>
         <div class="fs-card">
           <div class="fs-card-label">总出账(¥)</div>
-          <div class="fs-card-val expense">¥{{ fmtNum(statsData.totalOut) }}</div>
+          <div class="fs-card-val expense"><i class="pi pi-arrow-up-right fs-card-arrow"></i>¥{{ fmtNum(statsData.totalOut) }}</div>
         </div>
         <div class="fs-card">
           <div class="fs-card-label">总盈利(¥)</div>
-          <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(statsData.totalProfit) }}</div>
+          <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'profit-up' : 'profit-down'"><i :class="['pi', statsData.totalProfit >= 0 ? 'pi-arrow-up' : 'pi-arrow-down', 'fs-card-arrow']"></i>¥{{ fmtNum(statsData.totalProfit) }}</div>
         </div>
         <div class="fs-card">
           <div class="fs-card-label">待进账</div>
@@ -102,6 +102,7 @@
       <div class="wire-toolbar-actions">
         <Button icon="pi pi-plus" label="新建供应商" size="small" severity="secondary" @click="showAddGroup = true" />
         <Button icon="pi pi-plus" label="添加电汇" size="small" @click="openAdd" :disabled="activeGroup === null" />
+        <Button icon="pi pi-download" label="导出" size="small" severity="secondary" @click="showExport = true" />
       </div>
     </div>
 
@@ -113,11 +114,12 @@
           :key="g.id"
           class="tab-item"
           :class="{ active: activeGroup === g.id }"
+          title="双击重命名，右键更多操作"
           @click="switchGroup(g.id)"
           @dblclick="startRename(g)"
+          @contextmenu.prevent="onGroupCtx($event, g)"
         >
           <span>{{ g.name }}</span>
-          <i class="pi pi-times tab-close" @click.stop="deleteGroup(g.id)"></i>
         </div>
         <div class="tab-add" @click="showAddGroup = true"><i class="pi pi-plus"></i></div>
       </div>
@@ -185,6 +187,7 @@
         v-else
         :value="filteredRecords"
         dataKey="id"
+        v-model:selection="selectedRecords"
         contextMenu
         v-model:contextMenuSelection="ctxRow"
         stripedRows
@@ -198,6 +201,7 @@
         class="wire-table"
         @rowContextmenu="onRowCtx"
       >
+        <Column selectionMode="multiple" style="width: 28px" />
         <Column field="record_date" header="时间" style="min-width: 110px">
           <template #body="{ data }"><span>{{ data.record_date || '-' }}</span></template>
         </Column>
@@ -243,7 +247,10 @@
         </Column>
         <Column header="盈利" style="min-width: 100px">
           <template #body="{ data }">
-            <span v-if="data.out_amount" class="profit-cell" :class="profit(data) >= 0 ? 'profit-pos' : 'profit-neg'">¥{{ fmtNum(profit(data)) }}</span>
+            <span v-if="data.out_amount" class="profit-cell" :class="profit(data) >= 0 ? 'profit-pos' : 'profit-neg'">
+              <i :class="profit(data) >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down'" style="font-size:11px"></i>
+              ¥{{ fmtNum(Math.abs(profit(data))) }}
+            </span>
             <span v-else class="no-data">-</span>
           </template>
         </Column>
@@ -277,6 +284,7 @@
     </div>
 
     <ContextMenu ref="ctxMenu" :model="ctxItems" />
+    <ContextMenu ref="groupCtxMenu" :model="groupCtxItems" />
 
     <Dialog v-model:visible="showAdd" modal header="添加电汇信息" :style="{ width: '760px', maxWidth: '96vw' }" :draggable="false">
       <div class="form-body">
@@ -392,6 +400,30 @@
       </template>
     </Dialog>
 
+    <Dialog v-model:visible="showExport" modal header="导出数据" :style="{ width: '460px' }" :draggable="false">
+      <div class="export-body">
+        <div class="export-hint" v-if="selectedRecords.length">
+          将导出已选中的 <strong>{{ selectedRecords.length }}</strong> 条记录
+        </div>
+        <div class="export-hint" v-else style="color:var(--mac-red)">
+          <i class="pi pi-exclamation-triangle"></i> 请先在列表中勾选要导出的记录
+        </div>
+        <div class="form-field" style="margin-top:14px">
+          <label>导出字段</label>
+          <div class="field-checks">
+            <div v-for="f in exportFields" :key="f.key" class="field-check">
+              <Checkbox v-model="f.checked" :inputId="'exp_' + f.key" binary />
+              <label :for="'exp_' + f.key">{{ f.label }}</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="取消" text @click="showExport = false" />
+        <Button label="导出 Excel" icon="pi pi-file-excel" @click="doExport" />
+      </template>
+    </Dialog>
+
     <Dialog v-model:visible="showDetail" modal header="电汇详情" :style="{ width: '760px', maxWidth: '96vw' }" :draggable="false">
       <div v-if="activeRecord" class="detail-table-wrap">
         <table class="detail-table">
@@ -420,9 +452,11 @@
 <script setup>
 import { computed, onMounted, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Filler } from 'chart.js'
+import * as XLSX from 'xlsx'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -459,6 +493,8 @@ const rawInput = ref('')
 const showAdd = ref(false)
 const showDetail = ref(false)
 const showEdit = ref(false)
+const showExport = ref(false)
+const selectedRecords = ref([])
 const showInDialog = ref(false)
 const showAddGroup = ref(false)
 const showRenameGroup = ref(false)
@@ -471,6 +507,8 @@ const editId = ref(null)
 const inId = ref(null)
 const ctxRow = ref(null)
 const ctxMenu = ref(null)
+const groupCtxMenu = ref(null)
+const ctxGroup = ref(null)
 const filterDateRange = ref(null)
 const filters = ref({ currency: null, code: '', status: null, downstream_id: null, out_to: '' })
 const inForm = ref({ in_rate: 0 })
@@ -616,6 +654,99 @@ const ctxItems = computed(() => {
   items.push({ label: '删除', icon: 'pi pi-trash', command: () => deleteRecord(row.id) })
   return items
 })
+const groupCtxItems = [
+  { label: '重命名', icon: 'pi pi-pencil', command: () => ctxGroup.value && startRename(ctxGroup.value) },
+  { separator: true },
+  { label: '删除供应商', icon: 'pi pi-trash', command: () => ctxGroup.value && deleteGroup(ctxGroup.value.id) },
+]
+
+const exportFields = ref([
+  { key: 'record_date', label: '时间', checked: true },
+  { key: 'currency', label: '货币', checked: true },
+  { key: 'code', label: '编号', checked: true },
+  { key: 'group', label: '供应商', checked: true },
+  { key: 'status', label: '状态', checked: true },
+  { key: 'amount', label: '额度', checked: true },
+  { key: 'in_rate', label: '进账汇率', checked: true },
+  { key: 'in_total', label: '进账合计', checked: true },
+  { key: 'out_amount', label: '出账金额', checked: true },
+  { key: 'out_rate', label: '出账汇率', checked: true },
+  { key: 'out_total', label: '出账合计', checked: true },
+  { key: 'out_date', label: '出账日期', checked: true },
+  { key: 'out_to', label: '出货信息', checked: true },
+  { key: 'profit', label: '盈利', checked: true },
+  { key: 'settled', label: '结算', checked: true },
+  { key: 'name', label: 'Name', checked: true },
+  { key: 'bank', label: 'Bank', checked: true },
+  { key: 'account_number', label: 'Account number', checked: true },
+  { key: 'routing_number', label: 'Routing number', checked: true },
+  { key: 'swift_code', label: 'Swift code', checked: false },
+  { key: 'account_type', label: 'Account Type', checked: true },
+  { key: 'address', label: 'Address', checked: true },
+  { key: 'bank_address', label: 'Address bank', checked: true },
+  { key: 'birthday', label: 'Birthday', checked: false },
+])
+
+function doExport() {
+  if (!selectedRecords.value.length) { toast.add({ severity: 'warn', summary: '请先选中要导出的记录', life: 2000 }); return }
+  const data = selectedRecords.value
+
+  const fields = exportFields.value.filter(f => f.checked)
+  // 金额类字段导出为数字（而不是文本），Excel 里才能直接选中列求和
+  const rows = data.map(row => {
+    const obj = {}
+    for (const f of fields) {
+      let val
+      if (f.key === 'profit') val = row.out_amount ? Number(profit(row).toFixed(2)) : ''
+      else if (f.key === 'group') val = groupName(row.group_id)
+      else if (f.key === 'amount') val = Number(row.amount || 0)
+      else if (f.key === 'in_rate') val = row.in_rate > 0 ? Number(row.in_rate) : ''
+      else if (f.key === 'in_total') val = row.in_rate > 0 ? Number(((row.amount || 0) * row.in_rate).toFixed(2)) : ''
+      else if (f.key === 'out_amount') val = row.out_amount ? Number(row.out_amount) : ''
+      else if (f.key === 'out_rate') val = row.out_amount ? Number(row.out_rate || 1) : ''
+      else if (f.key === 'out_total') val = row.out_amount ? Number(((row.out_amount || 0) * (row.out_rate || 1)).toFixed(2)) : ''
+      else if (f.key === 'settled') val = !row.out_amount ? '—' : (row.settled ? '已完成' : '待结算')
+      else if (['code', 'account_number', 'routing_number', 'swift_code', 'birthday'].includes(f.key)) val = String(row[f.key] ?? '')
+      else val = row[f.key] ?? ''
+      obj[f.label] = val
+    }
+    return obj
+  })
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  // 表头加筛选下拉
+  if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] }
+
+  ws['!cols'] = fields.map(f => {
+    if (f.key === 'address' || f.key === 'bank_address') return { wch: 32 }
+    if (f.key === 'name' || f.key === 'account_number') return { wch: 22 }
+    if (f.key === 'bank' || f.key === 'routing_number' || f.key === 'swift_code' || f.key === 'out_to') return { wch: 16 }
+    if (f.key === 'record_date' || f.key === 'out_date') return { wch: 14 }
+    return { wch: 12 }
+  })
+
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+  const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' } }
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c })
+      if (!ws[addr]) ws[addr] = { v: '' }
+      ws[addr].s = centerStyle
+    }
+  }
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '电汇记录')
+  XLSX.writeFile(wb, `电汇记录_${new Date().toISOString().slice(0, 10)}.xlsx`)
+
+  showExport.value = false
+  toast.add({ severity: 'success', summary: `已导出 ${data.length} 条记录`, life: 2000 })
+}
+
+function onGroupCtx(event, group) {
+  ctxGroup.value = group
+  groupCtxMenu.value.show(event)
+}
 
 onMounted(async () => {
   await loadGroups()
@@ -814,9 +945,10 @@ async function savePrepaid() {
 }
 
 function deleteGroup(id) {
+  const group = groups.value.find(item => item.id === id)
   confirm.require({
-    message: '确定删除这个供应商吗？该供应商下记录会保留，但归属会被清空。',
-    header: '确认删除',
+    message: `确定删除供应商「${group?.name || ''}」吗？该供应商下记录会保留，但归属会被清空。`,
+    header: '确认删除供应商',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: '删除',
     rejectLabel: '取消',
@@ -852,7 +984,7 @@ function parseWireTransferText(text) {
     { key: 'birthday', labels: ['birthday', 'birth day'] },
     { key: 'code', labels: ['编号'] },
     { key: 'amount', labels: ['额度', 'amount'] },
-    { key: 'name', labels: ['name'] },
+    { key: 'name', labels: ['legal business name', 'business name', 'legal name', 'name'] },
     { key: 'bank', labels: ['bank'] },
     { key: 'address', labels: ['address'] },
   ]
@@ -862,7 +994,22 @@ function parseWireTransferText(text) {
     if (entry.key === 'amount') value = Number(String(value).replace(/[^\d.]/g, '')) || 0
     parsed[entry.key] = value
   }
+  if (!parsed.code) {
+    const leadingCode = extractLeadingCode(normalized)
+    if (leadingCode) parsed.code = leadingCode
+  }
   return parsed
+}
+
+// 新格式首行是裸编号（如 686、'686'），没有「编号：」标签；编号后允许直接跟字段（如 686    额度1111）
+function extractLeadingCode(text) {
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+    const match = line.match(/^[＇'‘’"“”「『]?([A-Za-z]{0,4}\d[\w-]{0,19})[＇'‘’"“”」』]?(?=$|\s{2,}|\t)/)
+    return match ? match[1] : ''
+  }
+  return ''
 }
 
 function extractFieldEntries(text, fieldMap) {
@@ -906,18 +1053,19 @@ async function copyDetail(row) {
 }
 
 function formatDetailForCopy(row) {
-  return [
-    `编号：${row.code || ''}    额度${row.amount || 0}`,
-    `Name：${row.name || ''}`,
+  const lines = [
+    `‘${row.code || ''}’${Number(row.amount) > 0 ? `    额度${row.amount}` : ''}`,
+    `Legal business name：${row.name || ''}`,
     `Bank：${row.bank || ''}`,
     `Account number：${row.account_number || ''}`,
     `Routing number：${row.routing_number || ''}`,
-    `Swift code：${row.swift_code || ''} `,
-    `Account Type：  ${row.account_type || ''}`,
-    `Address：  ${row.address || ''}`,
-    `Address bank：${row.bank_address || ''} `,
-    `birthday：${row.birthday || ''}`,
-  ].join('\n')
+  ]
+  if (String(row.swift_code || '').trim()) lines.push(`Swift code：${String(row.swift_code).trim()}`)
+  lines.push(`Account Type： ${row.account_type || ''}`)
+  lines.push(`Address：${row.address || ''}`)
+  lines.push(`Address bank：${row.bank_address || ''}`)
+  if (String(row.birthday || '').trim()) lines.push(`Birthday：${String(row.birthday).trim()}`)
+  return lines.join('\n')
 }
 
 function normalizeForm(raw) {
@@ -998,6 +1146,13 @@ watch(topTab, (val) => { if (val === 'stats') nextTick(renderDailyChart) })
 .fs-card { background: var(--mac-surface); border-radius: 12px; padding: 16px; text-align: center; box-shadow: var(--shadow-sm); }
 .fs-card-label { font-size: 11px; color: var(--mac-text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; }
 .fs-card-val { font-size: 20px; font-weight: 700; color: var(--mac-text); }
+.fs-card-val.income { color: #007aff; }
+.fs-card-val.expense { color: #e67e22; }
+.fs-card-val.profit-up { color: #34c759; }
+.fs-card-val.profit-down { color: #ff3b30; }
+.fs-card-arrow { font-size: 14px; margin-right: 6px; opacity: 0.85; }
+.fs-cur-val.income { color: #007aff; }
+.fs-cur-val.expense { color: #e67e22; }
 .fs-card-val.settle-rate { color: var(--mac-accent, #007aff); }
 .settle-progress { width: 100%; height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .settle-progress-fill { height: 100%; background: #34c759; border-radius: 2px; transition: width 0.4s ease; }
@@ -1023,10 +1178,9 @@ watch(topTab, (val) => { if (val === 'stats') nextTick(renderDailyChart) })
 .wire-subtitle { margin-top: 4px; font-size: 12px; color: var(--mac-text-secondary); }
 .group-tabs { border: 1px solid var(--mac-border); background: rgba(255,255,255,0.4); padding: 0 12px; border-radius: 14px; }
 .tab-list { display: flex; align-items: center; gap: 2px; overflow-x: auto; }
-.tab-item { display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--mac-text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab-item { display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--mac-text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; user-select: none; transition: color 0.15s, background 0.15s; border-radius: 8px 8px 0 0; }
+.tab-item:hover { color: var(--mac-text); background: rgba(0,0,0,0.04); }
 .tab-item.active { color: var(--mac-accent, #007aff); border-bottom-color: var(--mac-accent, #007aff); font-weight: 500; }
-.tab-close { font-size: 10px; opacity: 0; transition: opacity 0.15s; padding: 2px; }
-.tab-item:hover .tab-close { opacity: 0.5; }
 .tab-add { padding: 8px 10px; cursor: pointer; color: var(--mac-text-secondary); }
 .prepaid-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(245,249,255,0.82)); border: 1px solid rgba(0,122,255,0.12); box-shadow: var(--shadow-sm); }
 .prepaid-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1071,7 +1225,7 @@ watch(topTab, (val) => { if (val === 'stats') nextTick(renderDailyChart) })
 .amount-val.income { color: #007aff; }
 .amount-val.expense { color: #e67e22; }
 .amount-rate, .amount-total, .no-data { font-size: 12px; color: var(--mac-text-secondary); }
-.profit-cell { display: inline-flex; align-items: center; font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 6px; }
+.profit-cell { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 6px; }
 .profit-pos { color: #155724; background: rgba(52,199,89,0.12); }
 .profit-neg { color: #c0392b; background: rgba(255,59,48,0.12); }
 .out-info-cell { display: flex; flex-direction: column; gap: 2px; }
@@ -1085,6 +1239,10 @@ watch(topTab, (val) => { if (val === 'stats') nextTick(renderDailyChart) })
 .settle-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 2px; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .settle-switch.on .settle-thumb { transform: translateX(14px); }
 .row-actions { display: flex; align-items: center; gap: 2px; }
+.export-body { display: flex; flex-direction: column; gap: 12px; }
+.export-hint { font-size: 13px; color: var(--mac-text-secondary); padding: 4px 0; }
+.field-checks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+.field-check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .detail-table-wrap { border: 1px solid var(--mac-border); border-radius: 12px; overflow: hidden; }
 .detail-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .detail-table th, .detail-table td { border-bottom: 1px solid var(--mac-border); border-right: 1px solid var(--mac-border); padding: 10px 12px; font-size: 13px; color: var(--mac-text); vertical-align: top; word-break: break-word; }

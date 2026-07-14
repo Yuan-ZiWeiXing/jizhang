@@ -158,13 +158,13 @@
           v-for="g in filteredGroups" :key="g.id"
           class="tab-item"
           :class="{active: activeGroup === g.id}"
+          title="双击重命名，右键更多操作"
           @click="switchGroup(g.id)"
           @dblclick="startRename(g)"
           @contextmenu.prevent="onGroupCtx($event, g)"
         >
           <span>{{ g.name }}</span>
           <span v-if="groupPendingCount(g.id)" class="tab-badge">{{ groupPendingCount(g.id) }}</span>
-          <i class="pi pi-times tab-close" @click.stop="deleteGroup(g.id)"></i>
         </div>
         <div class="tab-add" @click="showAddGroup = true"><i class="pi pi-plus"></i></div>
       </div>
@@ -1174,11 +1174,23 @@ async function submitRenameGroup() {
   showRenameGroup.value = false
 }
 
-async function deleteGroup(id) {
-  if (!window.api) return
-  await window.api.deleteFundGroup(id)
-  groups.value = groups.value.filter(g => g.id !== id)
-  if (activeGroup.value === id) switchGroup(null)
+function deleteGroup(id) {
+  const group = groups.value.find(g => g.id === id)
+  confirm.require({
+    message: `确定删除供应商「${group?.name || ''}」吗？该供应商下记录会保留，但归属会被清空。`,
+    header: '确认删除供应商',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '删除',
+    rejectLabel: '取消',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      if (!window.api) return
+      await window.api.deleteFundGroup(id)
+      groups.value = groups.value.filter(g => g.id !== id)
+      if (activeGroup.value === id) switchGroup(null)
+      toast.add({ severity: 'success', summary: '已删除供应商', life: 1800 })
+    },
+  })
 }
 
 function profit(row) {
@@ -1496,14 +1508,15 @@ function doExport() {
   const data = selectedFunds.value
 
   const fields = exportFields.value.filter(f => f.checked)
+  // 金额类字段导出为数字（而不是文本），Excel 里才能直接选中列求和
   const rows = data.map(row => {
     const obj = {}
     for (const f of fields) {
       let val
-      if (f.key === 'profit') val = profit(row).toFixed(2)
+      if (f.key === 'profit') val = Number(profit(row).toFixed(2))
       else if (f.key === 'group') val = groupName(row.group_id)
-      else if (f.key === 'in_total') val = (row.in_amount * row.in_rate).toFixed(2)
-      else if (f.key === 'out_total') val = row.out_amount ? (row.out_amount * row.out_rate).toFixed(2) : ''
+      else if (f.key === 'in_total') val = Number((row.in_amount * row.in_rate).toFixed(2))
+      else if (f.key === 'out_total') val = row.out_amount ? Number((row.out_amount * row.out_rate).toFixed(2)) : ''
       else if (f.key === 'card_no') val = String(row.card_no ?? '')
       else if (f.key === 'card_date') val = String(row.card_date ?? '')
       else if (f.key === 'cvv') val = String(row.cvv ?? '')
@@ -1515,6 +1528,8 @@ function doExport() {
   })
 
   const ws = XLSX.utils.json_to_sheet(rows)
+  // 表头加筛选下拉
+  if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] }
 
   const colWidths = fields.map(f => {
     if (f.key === 'card_no') return { wch: 22 }
@@ -1679,9 +1694,6 @@ function fmtDate(d) {
   display: inline-flex; align-items: center; justify-content: center;
   line-height: 1;
 }
-.tab-close { font-size: 10px; opacity: 0; transition: opacity 0.15s; padding: 2px; border-radius: 3px; }
-.tab-item:hover .tab-close { opacity: 0.5; }
-.tab-close:hover { opacity: 1 !important; color: #ff3b30; }
 .tab-add {
   padding: 8px 10px; cursor: pointer; color: var(--mac-text-secondary);
   font-size: 12px; transition: color 0.15s;
@@ -1775,6 +1787,8 @@ function fmtDate(d) {
 .stat-label { font-size: 12px; color: var(--mac-text-secondary); font-weight: 500; }
 .stat-val { font-size: 14px; font-weight: 700; color: var(--mac-text); }
 .stat-val.unsettled, .fs-card-val.unsettled, .fs-cur-val.unsettled { color: #e67e22; }
+.stat-val.income, .fs-card-val.income, .fs-cur-val.income { color: #007aff; }
+.stat-val.expense, .fs-card-val.expense, .fs-cur-val.expense { color: #e67e22; }
 .stat-val.done { color: #155724; }
 .fs-card-val.settle-rate { color: var(--mac-accent, #007aff); }
 .settle-progress { width: 100%; height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-top: 6px; overflow: hidden; }
@@ -1798,6 +1812,8 @@ function fmtDate(d) {
 
 .amount-cell { display: flex; flex-direction: column; gap: 1px; }
 .amount-val { font-weight: 700; font-size: 14px; color: var(--mac-text); }
+.amount-val.income { color: #007aff; }
+.amount-val.expense { color: #e67e22; }
 .amount-rate { font-size: 12px; color: var(--mac-text-secondary); }
 .amount-total { font-size: 12px; color: var(--mac-text-secondary); font-style: italic; }
 .out-meta { display: flex; gap: 6px; font-size: 11px; color: var(--mac-text-secondary); margin-top: 2px; }
@@ -1807,6 +1823,8 @@ function fmtDate(d) {
 .out-info-cell { display: flex; flex-direction: column; gap: 2px; }
 
 .profit-cell { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px; color: var(--mac-text); background: rgba(0,0,0,0.04); }
+.profit-cell.profit-pos { color: #155724; background: rgba(52,199,89,0.12); }
+.profit-cell.profit-neg { color: #c0392b; background: rgba(255,59,48,0.12); }
 
 .record-date { font-size: 13px; color: var(--mac-text); font-family: 'SF Mono', 'Fira Mono', monospace; }
 .dp-btnbar { display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap; }
