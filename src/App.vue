@@ -10,11 +10,7 @@
   <div v-else class="mac-window">
     <!-- Title Bar -->
     <div class="mac-titlebar">
-      <div class="mac-titlebar-left">
-        <button class="mac-icon-btn" @click="showAddDialog = true" title="新增记录">
-          <i class="pi pi-plus"></i>
-        </button>
-      </div>
+      <div class="mac-titlebar-left"></div>
       <div class="mac-title">紫微星记账工具</div>
       <div class="mac-controls">
         <button class="mac-icon-btn" @click="lockApp" title="锁屏">
@@ -94,12 +90,9 @@
 
       <!-- Main Content -->
       <div class="mac-main">
-        <component :is="currentComponent" :key="currentView" @add="showAddDialog = true" />
+        <component :is="currentComponent" :key="currentView" />
       </div>
     </div>
-
-    <!-- Add Record Dialog -->
-    <AddRecordDialog v-if="showAddDialog" @close="showAddDialog = false" />
 
     <!-- Updater Dialog -->
     <UpdaterDialog />
@@ -117,7 +110,6 @@ import WireTransferView from './views/WireTransferView.vue'
 import One4AllView from './views/One4AllView.vue'
 import UpstreamView from './views/UpstreamView.vue'
 import DownstreamView from './views/DownstreamView.vue'
-import AddRecordDialog from './components/AddRecordDialog.vue'
 import UpdaterDialog from './components/UpdaterDialog.vue'
 import LockScreen from './components/LockScreen.vue'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -156,7 +148,6 @@ function checkUpdate() {
 }
 
 const currentView = ref('dashboard')
-const showAddDialog = ref(false)
 const accountingExpanded = ref(true)
 
 const accountingSubItems = ACCOUNTING_SUB_NAV

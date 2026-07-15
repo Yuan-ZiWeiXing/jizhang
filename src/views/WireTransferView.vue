@@ -52,12 +52,16 @@
           <div class="fs-card-val expense"><i class="pi pi-arrow-up-right fs-card-arrow"></i>¥{{ fmtNum(statsData.totalOut) }}</div>
         </div>
         <div class="fs-card">
-          <div class="fs-card-label">总盈利(¥)</div>
+          <div class="fs-card-label">总盈利·已结算(¥)</div>
           <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'profit-up' : 'profit-down'"><i :class="['pi', statsData.totalProfit >= 0 ? 'pi-arrow-up' : 'pi-arrow-down', 'fs-card-arrow']"></i>¥{{ fmtNum(statsData.totalProfit) }}</div>
         </div>
         <div class="fs-card">
           <div class="fs-card-label">待进账</div>
           <div class="fs-card-val neutral">{{ statsData.pendingInCount }} 条</div>
+        </div>
+        <div class="fs-card">
+          <div class="fs-card-label">未结算</div>
+          <div class="fs-card-val unsettled">{{ statsData.unsettledCount }} 笔 / ¥{{ fmtNum(statsData.unsettledAmount) }}</div>
         </div>
         <div class="fs-card">
           <div class="fs-card-label">结算率</div>
@@ -67,7 +71,7 @@
         </div>
       </div>
 
-      <div class="fs-section">
+      <div class="fs-section" v-if="statsData.byCurrency.length">
         <div class="fs-section-title">按货币统计</div>
         <div class="fs-currency-grid">
           <div v-for="cs in statsData.byCurrency" :key="cs.currency" class="fs-currency-card">
@@ -77,7 +81,8 @@
             <div class="fs-cur-divider"></div>
             <div class="fs-cur-row"><span class="fs-cur-label">折合进(¥)</span><span class="fs-cur-val income">¥{{ fmtNum(cs.inRmb) }}</span></div>
             <div class="fs-cur-row"><span class="fs-cur-label">折合出(¥)</span><span class="fs-cur-val expense">¥{{ fmtNum(cs.outRmb) }}</span></div>
-            <div class="fs-cur-row"><span class="fs-cur-label">盈利(¥)</span><span class="fs-cur-val" :class="cs.profit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(cs.profit) }}</span></div>
+            <div class="fs-cur-row"><span class="fs-cur-label">盈利·已结算(¥)</span><span class="fs-cur-val" :class="cs.profit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(cs.profit) }}</span></div>
+            <div v-if="cs.unsettledRmb" class="fs-cur-row"><span class="fs-cur-label">未结算(¥)</span><span class="fs-cur-val unsettled">¥{{ fmtNum(cs.unsettledRmb) }}</span></div>
           </div>
         </div>
       </div>
@@ -266,7 +271,7 @@
         <Column field="settled" header="结算" style="min-width: 90px">
           <template #body="{ data }">
             <div v-if="!data.out_amount" class="settle-switch disabled"><span class="settle-inline">—</span></div>
-            <div v-else class="settle-switch" :class="{ on: data.settled }" @click="toggleSettled(data)">
+            <div v-else class="settle-switch" :class="{ on: data.settled }" :title="data.settled ? '已结算不可改回' : '点击标记为已完成'" @click="toggleSettled(data)">
               <div class="settle-track"><div class="settle-thumb"></div></div>
               <span>{{ data.settled ? '已完成' : '待结算' }}</span>
             </div>
@@ -276,7 +281,7 @@
           <template #body="{ data }">
             <div class="row-actions">
               <Button icon="pi pi-pencil" text rounded @click="openEdit(data)" />
-              <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteRecord(data.id)" />
+              <Button icon="pi pi-trash" text rounded severity="danger" :disabled="!!data.settled" :title="data.settled ? '已结算的记录不能删除' : ''" @click="deleteRecord(data.id)" />
             </div>
           </template>
         </Column>
@@ -584,41 +589,50 @@ const statsFilteredRecords = computed(() => {
   if (statsOutTo.value) list = list.filter(r => String(r.out_to || '').toLowerCase().includes(statsOutTo.value.toLowerCase()))
   return list
 })
+const recordProfit = (r) => ((r.out_amount || 0) * (r.out_rate || 1)) - ((r.amount || 0) * (r.in_rate || 0))
 const statsData = computed(() => {
   const all = statsFilteredRecords.value
   const map = {}
-  for (const cur of currencyFilterOptions) map[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+  const emptyCur = cur => ({ currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0, unsettledRmb: 0 })
+  for (const cur of currencyFilterOptions) map[cur] = emptyCur(cur)
   for (const r of all) {
     const cur = r.currency || 'USD'
-    if (!map[cur]) map[cur] = { currency: cur, inAmount: 0, outAmount: 0, inRmb: 0, outRmb: 0, profit: 0 }
+    if (!map[cur]) map[cur] = emptyCur(cur)
     map[cur].inAmount += r.amount || 0
     map[cur].outAmount += r.out_amount || 0
     map[cur].inRmb += (r.amount || 0) * (r.in_rate || 0)
     map[cur].outRmb += (r.out_amount || 0) * (r.out_rate || 1)
-    map[cur].profit += ((r.out_amount || 0) * (r.out_rate || 1)) - ((r.amount || 0) * (r.in_rate || 0))
+    if (r.settled) map[cur].profit += recordProfit(r)
+    if (r.status === '待结算') map[cur].unsettledRmb += (r.out_amount || 0) * (r.out_rate || 1)
   }
   const totalIn = all.reduce((s, r) => s + ((r.amount || 0) * (r.in_rate || 0)), 0)
   const totalOut = all.reduce((s, r) => s + ((r.out_amount || 0) * (r.out_rate || 1)), 0)
-  const doneCount = all.filter(r => r.status === '已完成').length
+  const settledList = all.filter(r => r.settled)
+  const doneCount = settledList.length
+  const unsettled = all.filter(r => r.status === '待结算')
   return {
     totalCount: all.length,
     totalIn,
     totalOut,
-    totalProfit: totalOut - totalIn,
+    totalProfit: settledList.reduce((s, r) => s + recordProfit(r), 0),
     pendingInCount: all.filter(r => r.status === '待进账').length,
+    unsettledCount: unsettled.length,
+    unsettledAmount: unsettled.reduce((s, r) => s + ((r.out_amount || 0) * (r.out_rate || 1)), 0),
     doneCount,
     settleRate: all.length ? Math.round(doneCount / all.length * 100) : 0,
-    byCurrency: currencyFilterOptions.map(cur => map[cur]),
+    // 只展示有数据的货币，避免一排全 0 的空卡片
+    byCurrency: Object.values(map).filter(c => c.inAmount || c.outAmount || c.inRmb || c.outRmb || c.profit || c.unsettledRmb),
   }
 })
 const dailyChartData = computed(() => {
   const map = {}
+  const ensure = (d) => { if (!map[d]) map[d] = { inRmb: 0, outRmb: 0, profit: 0 }; return map[d] }
   for (const r of statsFilteredRecords.value) {
-    const d = r.record_date || '未知'
-    if (!map[d]) map[d] = { inRmb: 0, outRmb: 0, profit: 0 }
-    map[d].inRmb += (r.amount || 0) * (r.in_rate || 0)
-    map[d].outRmb += (r.out_amount || 0) * (r.out_rate || 1)
-    map[d].profit += ((r.out_amount || 0) * (r.out_rate || 1)) - ((r.amount || 0) * (r.in_rate || 0))
+    // 进账记在记录日期；出账记在出账日期（此前误记在记录日期，导致趋势图口径不对）
+    ensure(r.record_date || '未知').inRmb += (r.amount || 0) * (r.in_rate || 0)
+    if ((r.out_amount || 0) > 0) ensure(r.out_date || r.record_date || '未知').outRmb += (r.out_amount || 0) * (r.out_rate || 1)
+    // 盈利只统计已结算的记录，并记入点击结算的当天
+    if (r.settled) ensure(r.settled_date || r.out_date || r.record_date || '未知').profit += recordProfit(r)
   }
   let entries = Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
   if (chartRange.value > 0) {
@@ -627,20 +641,28 @@ const dailyChartData = computed(() => {
     for (let i = chartRange.value - 1; i >= 0; i--) {
       const d = new Date(now)
       d.setDate(d.getDate() - i)
-      labels.push(d.toISOString().slice(0, 10))
+      labels.push(fmtDate(d)) // 用本地日期，避免 toISOString 时区偏差导致早上 8 点前日期错位
     }
+    const profitArr = labels.map(d => map[d]?.profit || 0)
+    let cum = 0
+    const cumProfitData = profitArr.map(p => { cum += p; return cum })
     return {
       labels: labels.map(d => d.slice(5)),
       inData: labels.map(d => map[d]?.inRmb || 0),
       outData: labels.map(d => map[d]?.outRmb || 0),
-      profitData: labels.map(d => map[d]?.profit || 0),
+      profitData: profitArr,
+      cumProfitData,
     }
   }
+  const profitArr = entries.map(([, v]) => v.profit)
+  let cum = 0
+  const cumProfitData = profitArr.map(p => { cum += p; return cum })
   return {
     labels: entries.map(([d]) => d.slice(5)),
     inData: entries.map(([, v]) => v.inRmb),
     outData: entries.map(([, v]) => v.outRmb),
-    profitData: entries.map(([, v]) => v.profit),
+    profitData: profitArr,
+    cumProfitData,
   }
 })
 const ctxItems = computed(() => {
@@ -651,7 +673,7 @@ const ctxItems = computed(() => {
   if (row.status !== '待进账') items.push({ label: '出账', icon: 'pi pi-arrow-up-right', command: () => openEdit(row) })
   items.push({ separator: true })
   items.push({ label: '查看详情', icon: 'pi pi-eye', command: () => viewDetails(row) })
-  items.push({ label: '删除', icon: 'pi pi-trash', command: () => deleteRecord(row.id) })
+  if (!row.settled) items.push({ label: '删除', icon: 'pi pi-trash', command: () => deleteRecord(row.id) })
   return items
 })
 const groupCtxItems = [
@@ -888,13 +910,22 @@ async function submitEdit() {
 
 async function toggleSettled(row) {
   if (!row.out_amount || !window.api?.updateWireTransferSettled) return
-  const updated = await window.api.updateWireTransferSettled(row.id, row.settled ? 0 : 1)
+  if (row.settled) {
+    toast.add({ severity: 'warn', summary: '已结算的记录不能改回未结算', life: 2200 })
+    return
+  }
+  const updated = await window.api.updateWireTransferSettled(row.id, 1)
   const idx = records.value.findIndex(item => item.id === row.id)
   if (idx !== -1) records.value[idx] = updated
   await loadAllRecords()
 }
 
 function deleteRecord(id) {
+  const row = records.value.find(item => item.id === id) || allRecords.value.find(item => item.id === id)
+  if (row && row.settled) {
+    toast.add({ severity: 'warn', summary: '已结算的记录不能删除', life: 2200 })
+    return
+  }
   confirm.require({
     message: '确定删除这条电汇记录吗？',
     header: '确认删除',
@@ -1094,7 +1125,8 @@ function normalizeForm(raw) {
   }
 }
 
-function profit(row) { return ((row.out_amount || 0) * (row.out_rate || 1)) - ((row.amount || 0) * (row.in_rate || 1)) }
+// 与统计口径统一：未录进账汇率时按 0 计成本（此前此处误用 || 1，与统计页结果不一致）
+function profit(row) { return recordProfit(row) }
 function statusClass(status) { if (status === '已完成') return 'status-done'; if (status === '待结算') return 'status-settle'; if (status === '待进账') return 'status-in'; return 'status-pending' }
 function groupName(groupId) { return groups.value.find(item => item.id === groupId)?.name || '' }
 const currencySymbolMap = { USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' }
@@ -1116,15 +1148,22 @@ function renderDailyChart() {
       datasets: [
         { label: '进账(¥)', data: d.inData, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
         { label: '出账(¥)', data: d.outData, borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
-        { label: '盈利(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '盈利·结算日(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '累计盈利(¥)', data: d.cumProfitData, borderColor: '#af52de', backgroundColor: 'rgba(175,82,222,0.08)', tension: 0.35, fill: false, pointRadius: 2, borderWidth: 2, borderDash: [5, 3] },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top' } },
-      scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(0,0,0,0.05)' } } },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ¥${ctx.parsed.y.toFixed(2)}` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, callback: v => '¥' + v.toLocaleString() } },
+      },
     },
   })
 }
@@ -1150,9 +1189,11 @@ watch(topTab, (val) => { if (val === 'stats') nextTick(renderDailyChart) })
 .fs-card-val.expense { color: #e67e22; }
 .fs-card-val.profit-up { color: #34c759; }
 .fs-card-val.profit-down { color: #ff3b30; }
+.fs-card-val.unsettled { color: #e67e22; font-size: 16px; }
 .fs-card-arrow { font-size: 14px; margin-right: 6px; opacity: 0.85; }
 .fs-cur-val.income { color: #007aff; }
 .fs-cur-val.expense { color: #e67e22; }
+.fs-cur-val.unsettled { color: #e67e22; }
 .fs-card-val.settle-rate { color: var(--mac-accent, #007aff); }
 .settle-progress { width: 100%; height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .settle-progress-fill { height: 100%; background: #34c759; border-radius: 2px; transition: width 0.4s ease; }

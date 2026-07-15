@@ -73,7 +73,7 @@
           <div class="fs-card-val expense">¥{{ fmtNum(statsData.totalOut) }}</div>
         </div>
         <div class="fs-card">
-          <div class="fs-card-label">总盈利(¥)</div>
+          <div class="fs-card-label">总盈利·已结算(¥)</div>
           <div class="fs-card-val" :class="statsData.totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(statsData.totalProfit) }}</div>
         </div>
         <div class="fs-card">
@@ -88,7 +88,7 @@
         </div>
       </div>
 
-      <div class="fs-section">
+      <div class="fs-section" v-if="statsData.byCurrency.length">
         <div class="fs-section-title">按货币统计</div>
         <div class="fs-currency-grid">
           <div v-for="cs in statsData.byCurrency" :key="cs.currency" class="fs-currency-card">
@@ -113,7 +113,7 @@
               <span class="fs-cur-val expense">¥{{ fmtNum(cs.outRmb) }}</span>
             </div>
             <div class="fs-cur-row">
-              <span class="fs-cur-label">盈利(¥)</span>
+              <span class="fs-cur-label">盈利·已结算(¥)</span>
               <span class="fs-cur-val" :class="cs.profit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(cs.profit) }}</span>
             </div>
             <div v-if="cs.unsettledRmb" class="fs-cur-row">
@@ -248,7 +248,6 @@
       <span class="batch-info">已选 {{ selectedFunds.length }} 项</span>
       <Button label="批量出账" icon="pi pi-pencil" size="small" @click="openBatchEdit" />
       <Button label="标记已完成" icon="pi pi-check-circle" size="small" severity="success" @click="batchToggleSettled(true)" />
-      <Button label="取消完成" icon="pi pi-circle" size="small" severity="secondary" @click="batchToggleSettled(false)" />
       <Button label="批量删除" icon="pi pi-trash" size="small" severity="danger" @click="batchDelete" />
       <Button label="取消选择" text size="small" @click="selectedFunds = []" />
     </div>
@@ -351,7 +350,7 @@
             <div v-if="!data.out_amount" class="settle-switch disabled">
               <span class="settle-inline">—</span>
             </div>
-            <div v-else class="settle-switch" :class="{ on: data.settled }" @click="toggleSettled(data)">
+            <div v-else class="settle-switch" :class="{ on: data.settled }" :title="data.settled ? '已结算不可改回' : '点击标记为已完成'" @click="toggleSettled(data)">
               <div class="settle-track"><div class="settle-thumb"></div></div>
               <span>{{ data.settled ? '已完成' : '待结算' }}</span>
             </div>
@@ -359,7 +358,7 @@
         </Column>
         <Column style="width:56px">
           <template #body="{data}">
-            <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteFund(data.id)" />
+            <Button icon="pi pi-trash" text rounded severity="danger" :disabled="!!data.settled" :title="data.settled ? '已结算的记录不能删除' : ''" @click="deleteFund(data.id)" />
           </template>
         </Column>
         <template #paginatorstart>
@@ -391,12 +390,14 @@
         <span class="stat-val unsettled">{{ unsettledCount }} 条 / ¥{{ fmtNum(unsettledAmount) }}</span>
       </div>
       <div class="stat-divider"></div>
-      <div v-for="cs in currencyStats" :key="cs.currency" class="stat-currency-group">
-        <span class="stat-currency-tag">{{ cs.currency }}</span>
-        <span class="stat-val income">进 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.inAmount) }}</span>
-        <span class="stat-val expense">出 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.outAmount) }}</span>
-      </div>
-      <div class="stat-divider"></div>
+      <template v-if="currencyStats.length">
+        <div v-for="cs in currencyStats" :key="cs.currency" class="stat-currency-group">
+          <span class="stat-currency-tag">{{ cs.currency }}</span>
+          <span class="stat-val income">进 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.inAmount) }}</span>
+          <span class="stat-val expense">出 {{ currencySymbol(cs.currency) }}{{ fmtNum(cs.outAmount) }}</span>
+        </div>
+        <div class="stat-divider"></div>
+      </template>
       <div class="stat-item">
         <span class="stat-label">总进账(¥)</span>
         <span class="stat-val income">¥{{ fmtNum(totalIn) }}</span>
@@ -406,7 +407,7 @@
         <span class="stat-val expense">¥{{ fmtNum(totalOut) }}</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">总盈利(¥)</span>
+        <span class="stat-label">总盈利·已结算(¥)</span>
         <span class="stat-val" :class="totalProfit >= 0 ? 'income' : 'expense'">¥{{ fmtNum(totalProfit) }}</span>
       </div>
       <div class="stat-divider"></div>
@@ -787,7 +788,7 @@ const filteredFunds = computed(() => {
 
 const totalIn = computed(() => filteredFunds.value.reduce((s, f) => s + f.in_amount * f.in_rate, 0))
 const totalOut = computed(() => filteredFunds.value.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0))
-const totalProfit = computed(() => totalOut.value - totalIn.value)
+const totalProfit = computed(() => filteredFunds.value.filter(f => f.settled).reduce((s, f) => s + profit(f), 0))
 const pendingCount = computed(() => filteredFunds.value.filter(f => f.status === '待出账').length)
 const unsettledCount = computed(() => filteredFunds.value.filter(f => f.status === '待结算').length)
 const unsettledAmount = computed(() => filteredFunds.value.filter(f => f.status === '待结算').reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0))
@@ -864,7 +865,8 @@ const currencyStats = computed(() => {
     map[cur].outTotal += (f.out_amount || 0) * (f.out_rate || 1)
     map[cur].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
   }
-  return allCurrencies.map(cur => map[cur])
+  // 只展示有数据的货币，避免底部统计栏出现一串全 0 的货币
+  return Object.values(map).filter(c => c.inAmount || c.outAmount)
 })
 
 // Stats filters
@@ -933,18 +935,20 @@ const statsData = computed(() => {
     curMap[cur].outAmount += (f.out_amount || 0)
     curMap[cur].inRmb += f.in_amount * f.in_rate
     curMap[cur].outRmb += (f.out_amount || 0) * (f.out_rate || 1)
-    curMap[cur].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+    if (f.settled) curMap[cur].profit += profit(f)
     if (f.status === '待结算') curMap[cur].unsettledRmb += (f.out_amount || 0) * (f.out_rate || 1)
   }
-  const byCurrency = allCurrencies.map(cur => curMap[cur])
+  // 只展示有数据的货币，避免一排全 0 的空卡片
+  const byCurrency = Object.values(curMap).filter(c => c.inAmount || c.outAmount || c.inRmb || c.outRmb || c.profit || c.unsettledRmb)
 
   const unsettled = all.filter(f => f.status === '待结算')
   const unsettledCount = unsettled.length
   const unsettledAmount = unsettled.reduce((s, f) => s + (f.out_amount || 0) * (f.out_rate || 1), 0)
-  const doneCount = all.filter(f => f.status === '已完成').length
+  const settledList = all.filter(f => f.settled)
+  const doneCount = settledList.length
   const settleRate = all.length ? Math.round(doneCount / all.length * 100) : 0
 
-  return { totalIn: tIn, totalOut: tOut, totalProfit: tOut - tIn, totalCount: all.length, byCurrency, unsettledCount, unsettledAmount, doneCount, settleRate }
+  return { totalIn: tIn, totalOut: tOut, totalProfit: settledList.reduce((s, f) => s + profit(f), 0), totalCount: all.length, byCurrency, unsettledCount, unsettledAmount, doneCount, settleRate }
 })
 
 const dailyChartCanvas = ref(null)
@@ -960,12 +964,13 @@ const chartRangeOptions = [
 const dailyChartData = computed(() => {
   const all = statsFilteredFunds.value
   const dayMap = {}
+  const ensure = (d) => { if (!dayMap[d]) dayMap[d] = { inRmb: 0, outRmb: 0, profit: 0 }; return dayMap[d] }
   for (const f of all) {
-    const d = f.record_date || '未知'
-    if (!dayMap[d]) dayMap[d] = { inRmb: 0, outRmb: 0, profit: 0 }
-    dayMap[d].inRmb += f.in_amount * f.in_rate
-    dayMap[d].outRmb += (f.out_amount || 0) * (f.out_rate || 1)
-    dayMap[d].profit += ((f.out_amount || 0) * (f.out_rate || 1)) - (f.in_amount * f.in_rate)
+    // 进账记在记录日期；出账记在出账日期（此前误记在记录日期，导致趋势图口径不对）
+    ensure(f.record_date || '未知').inRmb += f.in_amount * f.in_rate
+    if ((f.out_amount || 0) > 0) ensure(f.out_date || f.record_date || '未知').outRmb += (f.out_amount || 0) * (f.out_rate || 1)
+    // 盈利只统计已结算的记录，并记入点击结算的当天
+    if (f.settled) ensure(f.settled_date || f.out_date || f.record_date || '未知').profit += profit(f)
   }
 
   const days = chartRange.value
@@ -977,7 +982,7 @@ const dailyChartData = computed(() => {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(now)
       d.setDate(d.getDate() - i)
-      labels.push(d.toISOString().slice(0, 10))
+      labels.push(fmtDate(d)) // 用本地日期，避免 toISOString 时区偏差导致早上 8 点前日期错位
     }
     const profitArr = labels.map(d => (dayMap[d]?.profit || 0))
     let cum = 0
@@ -1015,7 +1020,7 @@ function renderDailyChart() {
       datasets: [
         { label: '进账(¥)', data: d.inData, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
         { label: '出账(¥)', data: d.outData, borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
-        { label: '盈利(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
+        { label: '盈利·结算日(¥)', data: d.profitData, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.08)', tension: 0.35, fill: true, pointRadius: 3, borderWidth: 2 },
         { label: '累计盈利(¥)', data: d.cumProfitData, borderColor: '#af52de', backgroundColor: 'rgba(175,82,222,0.08)', tension: 0.35, fill: false, pointRadius: 2, borderWidth: 2, borderDash: [5, 3] },
       ],
     },
@@ -1388,6 +1393,11 @@ async function copyCardInfo(data) {
 }
 
 function deleteFund(id) {
+  const row = funds.value.find(f => f.id === id) || allFunds.value.find(f => f.id === id)
+  if (row && row.settled) {
+    toast.add({ severity: 'warn', summary: '已结算的记录不能删除', life: 2200 })
+    return
+  }
   confirm.require({
     message: '确定要删除这条记录吗？',
     header: '确认删除',
@@ -1452,22 +1462,30 @@ async function submitBatchEdit() {
 
 function batchDelete() {
   if (!selectedFunds.value.length) return
-  const count = selectedFunds.value.length
+  const deletable = selectedFunds.value.filter(f => !f.settled)
+  const settledCount = selectedFunds.value.length - deletable.length
+  if (!deletable.length) {
+    toast.add({ severity: 'warn', summary: '已结算的记录不能删除', life: 2200 })
+    return
+  }
+  const count = deletable.length
   confirm.require({
-    message: `确定要删除选中的 ${count} 条记录吗？此操作不可恢复。`,
+    message: settledCount
+      ? `选中的记录中有 ${settledCount} 条已结算不能删除，将删除其余 ${count} 条，此操作不可恢复。`
+      : `确定要删除选中的 ${count} 条记录吗？此操作不可恢复。`,
     header: '确认批量删除',
     icon: 'pi pi-exclamation-triangle',
-    acceptLabel: '全部删除',
+    acceptLabel: '删除',
     rejectLabel: '取消',
     acceptClass: 'p-button-danger',
     accept: async () => {
       if (!window.api) return
-      for (const f of selectedFunds.value) {
+      for (const f of deletable) {
         await window.api.deleteFund(f.id)
       }
-      const ids = new Set(selectedFunds.value.map(f => f.id))
+      const ids = new Set(deletable.map(f => f.id))
       funds.value = funds.value.filter(f => !ids.has(f.id))
-      selectedFunds.value = []
+      selectedFunds.value = selectedFunds.value.filter(f => !ids.has(f.id))
       toast.add({ severity: 'info', summary: `已删除 ${count} 条记录`, life: 2000 })
       refreshAllFunds()
     }
@@ -1476,8 +1494,11 @@ function batchDelete() {
 
 async function toggleSettled(fund) {
   if (!window.api || !fund.out_amount) return
-  const newVal = fund.settled ? 0 : 1
-  const updated = await window.api.updateFundSettled(fund.id, newVal)
+  if (fund.settled) {
+    toast.add({ severity: 'warn', summary: '已结算的记录不能改回未结算', life: 2200 })
+    return
+  }
+  const updated = await window.api.updateFundSettled(fund.id, 1)
   fund.settled = updated.settled
   fund.status = updated.status
   const af = allFunds.value.find(f => f.id === fund.id)

@@ -155,6 +155,11 @@ export function createDb(userDataPath) {
   try { db.exec("ALTER TABLE wire_transfers ADD COLUMN out_rate REAL DEFAULT 1") } catch(e) {}
   try { db.exec("ALTER TABLE wire_transfers ADD COLUMN settled INTEGER DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE wire_transfers ADD COLUMN downstream_id INTEGER DEFAULT NULL") } catch(e) {}
+  try { db.exec("ALTER TABLE funds ADD COLUMN settled_date TEXT DEFAULT ''") } catch(e) {}
+  try { db.exec("ALTER TABLE wire_transfers ADD COLUMN settled_date TEXT DEFAULT ''") } catch(e) {}
+  // 老数据回填结算日期：优先出账日期，其次记录日期
+  try { db.exec("UPDATE funds SET settled_date = CASE WHEN IFNULL(out_date,'') <> '' THEN out_date ELSE IFNULL(record_date,'') END WHERE IFNULL(settled,0) = 1 AND IFNULL(settled_date,'') = ''") } catch(e) {}
+  try { db.exec("UPDATE wire_transfers SET settled_date = CASE WHEN IFNULL(out_date,'') <> '' THEN out_date ELSE IFNULL(record_date,'') END WHERE IFNULL(settled,0) = 1 AND IFNULL(settled_date,'') = ''") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN prepaid_used REAL DEFAULT 0") } catch(e) {}
   try { db.exec("ALTER TABLE fund_groups ADD COLUMN enabled INTEGER DEFAULT 1") } catch(e) {}
@@ -281,21 +286,23 @@ export function createDb(userDataPath) {
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(result.lastInsertRowid)
     },
     updateFundOut(id, { out_amount, out_rate, out_date, out_to, status, downstream_id, settled }) {
-      db.prepare('UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=?, downstream_id=?, settled=? WHERE id=?')
-        .run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', downstream_id ?? null, settled ?? 0, id)
+      db.prepare(`UPDATE funds SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=?, downstream_id=?, settled=?, settled_date = CASE WHEN ? = 1 THEN CASE WHEN IFNULL(settled_date,'') <> '' AND IFNULL(settled,0) = 1 THEN settled_date ELSE date('now','localtime') END ELSE '' END WHERE id=?`)
+        .run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', downstream_id ?? null, settled ?? 0, settled ?? 0, id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
     updateFundSettled(id, settled) {
-      db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END WHERE id = ?`).run(settled ? 1 : 0, settled ? 1 : 0, id)
+      db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END, settled_date = CASE WHEN ? = 1 THEN date('now','localtime') ELSE '' END WHERE id = ?`).run(settled ? 1 : 0, settled ? 1 : 0, settled ? 1 : 0, id)
       return db.prepare('SELECT * FROM funds WHERE id = ?').get(id)
     },
     batchUpdateSettled(ids, settled) {
-      const stmt = db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END WHERE id = ?`)
-      const run = db.transaction((list) => { for (const id of list) stmt.run(settled ? 1 : 0, settled ? 1 : 0, id) })
+      const stmt = db.prepare(`UPDATE funds SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' ELSE '待出账' END, settled_date = CASE WHEN ? = 1 THEN CASE WHEN IFNULL(settled,0) = 1 AND IFNULL(settled_date,'') <> '' THEN settled_date ELSE date('now','localtime') END ELSE '' END WHERE id = ?`)
+      const run = db.transaction((list) => { for (const id of list) stmt.run(settled ? 1 : 0, settled ? 1 : 0, settled ? 1 : 0, id) })
       run(ids)
       return { ok: true, count: ids.length }
     },
     deleteFund(id) {
+      const row = db.prepare('SELECT settled FROM funds WHERE id = ?').get(id)
+      if (row && Number(row.settled) === 1) return { ok: false, reason: 'settled' }
       db.prepare('DELETE FROM funds WHERE id = ?').run(id)
       return { ok: true }
     },
@@ -355,15 +362,17 @@ export function createDb(userDataPath) {
       return db.prepare('SELECT * FROM wire_transfers WHERE id = ?').get(id)
     },
     updateWireTransferOut(id, { out_amount, out_rate, out_date, out_to, status, downstream_id, settled }) {
-      db.prepare('UPDATE wire_transfers SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=?, downstream_id=?, settled=? WHERE id=?')
-        .run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', downstream_id ?? null, settled ?? 0, id)
+      db.prepare(`UPDATE wire_transfers SET out_amount=?, out_rate=?, out_date=?, out_to=?, status=?, downstream_id=?, settled=?, settled_date = CASE WHEN ? = 1 THEN CASE WHEN IFNULL(settled_date,'') <> '' AND IFNULL(settled,0) = 1 THEN settled_date ELSE date('now','localtime') END ELSE '' END WHERE id=?`)
+        .run(out_amount, out_rate, out_date || '', out_to || '', status || '待出账', downstream_id ?? null, settled ?? 0, settled ?? 0, id)
       return db.prepare('SELECT * FROM wire_transfers WHERE id = ?').get(id)
     },
     updateWireTransferSettled(id, settled) {
-      db.prepare(`UPDATE wire_transfers SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' WHEN IFNULL(in_rate, 0) > 0 THEN '待出账' ELSE '待进账' END WHERE id = ?`).run(settled ? 1 : 0, settled ? 1 : 0, id)
+      db.prepare(`UPDATE wire_transfers SET settled = ?, status = CASE WHEN ? = 1 THEN '已完成' WHEN out_amount > 0 THEN '待结算' WHEN IFNULL(in_rate, 0) > 0 THEN '待出账' ELSE '待进账' END, settled_date = CASE WHEN ? = 1 THEN date('now','localtime') ELSE '' END WHERE id = ?`).run(settled ? 1 : 0, settled ? 1 : 0, settled ? 1 : 0, id)
       return db.prepare('SELECT * FROM wire_transfers WHERE id = ?').get(id)
     },
     deleteWireTransfer(id) {
+      const row = db.prepare('SELECT settled FROM wire_transfers WHERE id = ?').get(id)
+      if (row && Number(row.settled) === 1) return { ok: false, reason: 'settled' }
       db.prepare('DELETE FROM wire_transfers WHERE id = ?').run(id)
       return { ok: true }
     },
